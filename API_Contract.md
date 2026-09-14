@@ -843,6 +843,46 @@ Aturan:
 
 Semua endpoint admin memakai JWT dari cookie dan permission terbaru dari server. Jika tidak punya permission, response `403 PERMISSION_DENIED`.
 
+### Diskon: voucher dan flash sale
+
+```http
+GET   /api/v1/admin/vouchers
+POST  /api/v1/admin/vouchers
+GET   /api/v1/admin/vouchers/{voucher_id}
+PATCH /api/v1/admin/vouchers/{voucher_id}
+DELETE /api/v1/admin/vouchers/{voucher_id}
+POST  /api/v1/admin/vouchers/check
+GET   /api/v1/admin/flash-sales
+POST  /api/v1/admin/flash-sales
+GET   /api/v1/admin/flash-sales/{flash_sale_id}
+PATCH /api/v1/admin/flash-sales/{flash_sale_id}
+DELETE /api/v1/admin/flash-sales/{flash_sale_id}
+GET   /api/v1/admin/discount-options
+```
+
+Endpoint baca memerlukan `discount.read`. Pembuatan, perubahan, dan penonaktifan memerlukan
+`discount.manage`; `POST /api/v1/admin/vouchers/check` tetap memakai `discount.read`. Semua mutasi,
+termasuk pemeriksaan voucher yang memakai POST, mengirim `X-CSRF-Token`. `DELETE` hanya menonaktifkan
+aturan, bukan menghapus riwayat pemakaian.
+
+Voucher memakai `code`, `discount_type` (`percent` atau `fixed`), `scope` (`all_prices` atau
+`selected_prices`), jendela waktu opsional, kuota total opsional, dan batas minimal transaksi opsional.
+Kode dinormalisasi menjadi huruf besar dan tidak dapat diubah setelah dibuat. Voucher berlaku sekali
+per pelanggan.
+
+Flash sale memakai jendela waktu wajib dan satu atau beberapa paket. Memilih beberapa paket membuat
+satu baris per paket dalam satu transaksi. Baris yang sudah dibuat tidak dapat dipindahkan ke paket
+lain. Harga yang ditentukan lewat `selected_prices` harus berasal dari paket barisnya.
+
+Voucher dan flash sale tidak ditumpuk. Resolver harga bersama memilih potongan terbesar untuk setiap
+harga. `POST /api/v1/admin/vouchers/check` hanya memeriksa dan menghitung, tidak mencatat pemakaian.
+Pencatatan redemption dilakukan saat alur pembuatan invoice/checkout tersedia.
+
+Response list tetap memakai cursor pagination dan envelope list di atas. `discount-options` mengirim
+pilihan paket dan harga untuk formulir admin beserta ringkasan voucher dan flash sale.
+
+---
+
 ### Auth admin
 
 ```http

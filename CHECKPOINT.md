@@ -3,7 +3,7 @@
 Catatan keadaan proyek Nayaka. Tujuannya supaya pekerjaan bisa dilanjutkan tanpa membaca ulang
 seluruh riwayat percakapan, dan supaya keputusan yang belum selesai tidak hilang.
 
-Terakhir diperbarui: 13 September 2026. Konsol berjalan di pm2 sebagai proses `nayaka`, port 3101.
+Terakhir diperbarui: 14 September 2026. Konsol berjalan di pm2 sebagai proses `nayaka`, port 3101.
 
 ---
 
@@ -13,11 +13,11 @@ Konsol admin Nayaka: Next.js 16 App Router, satu proyek berisi backend dan antar
 
 | Bagian | Jumlah | Keterangan |
 |---|---|---|
-| Halaman | 24 | Termasuk halaman masuk dan galeri komponen |
-| Endpoint API | 49 rute | Di bawah `/api/v1/admin` |
-| Tabel database | 31 | 7 migrasi terpasang di Supabase |
-| Komponen | 14 ui + 11 atom + 17 molekul + 23 organisme | Metode atom dan molekul |
-| Skema zod | 10 | Dipakai bersama klien dan server |
+| Halaman | 26 | Termasuk halaman masuk dan dua halaman diskon |
+| Endpoint API | 61 rute | Di bawah `/api/v1/admin` |
+| Tabel database | 35 | 9 migrasi terpasang di Supabase |
+| Komponen | 14 ui + 11 atom + 17 molekul + 26 organisme | Metode atom dan molekul |
+| Skema zod | 11 | Dipakai bersama klien dan server |
 
 Perintah:
 
@@ -228,14 +228,19 @@ daftar lognya; tabel kedua hanya satu baris per jenis operasi penyedia.
 
 ## 7. Yang belum pernah diuji
 
-**Tidak ada otomasi peramban di proyek ini.** Yang diperiksa hanya kode status HTTP dan
-tidak adanya penanda galat di HTML. Artinya hal-hal berikut belum pernah diverifikasi dan
-perlu dibuka sendiri di peramban:
+**Uji browser modul diskon belum menghasilkan click-through valid.** Route halaman mengembalikan `307`
+ketika sesi tidak tersedia. Smoke test endpoint tanpa cookie menghasilkan `401`, sesuai guard. Login
+uji dengan kredensial sementara menghasilkan `401 INVALID_CREDENTIALS`, sehingga endpoint dengan sesi
+admin nyata belum terbukti.
+
+Bagian berikut tetap belum diverifikasi dan perlu dibuka sendiri di peramban:
 
 - Klik, perpindahan tab, dan pengiriman formulir
 - Tampilan visual, tata letak, dan ganti tema
 - Hidrasi dan `SessionBootstrap`
 - Fokus papan ketik dan pembacaan layar
+
+**Catatan historis:** daftar di bawah berlaku untuk halaman lama sebelum modul diskon ditambahkan.
 
 **Halaman detail mengambil data di klien.** HTML dari server hanya memuat kerangka
 "Memuat ...", bukan isinya. Pemeriksaan HTTP 200 pada halaman-halaman itu tidak membuktikan
