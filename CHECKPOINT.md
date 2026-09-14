@@ -199,10 +199,6 @@ tanggal UTC dan pada pukul 07.00 WIB tanggalnya masih kemarin.
 - `/roles` dan `/roles/[id]`: daftar peran, katalog 20 izin, kotak centang izin per modul,
   panel pemegang, simpan dengan alasan
 
-**Rujukan**
-
-- `/design-system`: galeri seluruh komponen
-
 **Setiap tabel daftar punya kontrol halaman.** Kontrolnya seragam: rentang baris, tombol mundur
 dan maju, dan pemilih 20/50/100 baris per halaman. Tombol mundur dan maju tetap dirender tetapi
 dinonaktifkan saat tidak ada halaman tujuan, dan ringkasannya selalu tampil termasuk ketika
@@ -274,7 +270,7 @@ maupun peran.
 | `DESIGN.md` | Arah desain yang mengikat untuk urusan tampilan |
 | `src/lib/password-rules.ts` | Satu-satunya tempat aturan kata sandi |
 | `src/lib/report-labels.ts` | Jenis laporan, dipakai klien dan server |
-| `src/lib/nav.ts` | Daftar menu sidebar beserta izin yang dibutuhkan |
+| `src/lib/nav.ts` | Daftar modul dan menu sidebar beserta izin serta keterangannya |
 | `src/lib/server/guard.ts` | Pemeriksaan sesi dan izin |
 | `src/lib/server/errors.ts` | Daftar kode galat dan status HTTP-nya |
 | `db/migrations/` | 7 migrasi yang sudah terpasang |

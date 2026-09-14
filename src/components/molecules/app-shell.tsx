@@ -11,7 +11,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { navEntries } from "@/lib/nav";
+import { navModules } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { useShellStore } from "@/stores/ui-store";
 
@@ -66,14 +66,31 @@ function NavList({
   onNavigate?: () => void;
 }) {
   return (
-    <nav aria-label="Navigasi utama" className="flex flex-col gap-0.5">
-      {navEntries.map((entry) => (
-        <NavItem
-          key={entry.href}
-          entry={entry}
-          collapsed={collapsed}
-          onNavigate={onNavigate}
-        />
+    <nav aria-label="Navigasi utama" className="flex flex-col gap-5">
+      {navModules.map((modul) => (
+        <div key={modul.label} className="flex flex-col gap-0.5">
+          {/*
+            Judul kelompok disembunyikan saat sidebar diciutkan, karena ruangnya tidak cukup
+            dan labelnya akan terpotong menjadi bercak. Yang tersisa adalah pengelompokan
+            jarak antar ikon, dan judulnya tetap ada untuk pembaca layar.
+          */}
+          <p
+            className={cn(
+              "text-muted-foreground px-2.5 pb-1 text-[11px] font-medium uppercase tracking-[0.12em]",
+              collapsed && "sr-only",
+            )}
+          >
+            {modul.label}
+          </p>
+          {modul.entries.map((entry) => (
+            <NavItem
+              key={entry.href}
+              entry={entry}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </div>
       ))}
     </nav>
   );

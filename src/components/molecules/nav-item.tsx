@@ -24,22 +24,33 @@ export type NavEntry = {
     bisa dibuka, supaya admin tidak menekan menu yang pasti ditolak server.
   */
   permission?: string;
+  /*
+    Satu kalimat yang menjawab "menu ini untuk apa". Dipakai sebagai keterangan saat penunjuk
+    diarahkan ke entri. Label sidebar harus pendek supaya muat, jadi keterangan inilah tempat
+    menjelaskan isinya tanpa memanjangkan label.
+  */
+  hint?: string;
 };
 
 const base =
   "flex min-h-11 items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors md:min-h-9";
 
 /*
-  Saat sidebar diciutkan, label hilang, jadi tooltip menggantikannya.
-  Tanpa tooltip, ikon tanpa label tidak bisa dipahami.
+  Keterangan menu muncul saat penunjuk diarahkan ke entri.
+
+  Saat sidebar diciutkan, label hilang dan keterangan inilah satu-satunya cara entri dikenali,
+  jadi tooltip wajib ada. Saat sidebar terbuka, tooltip hanya dipasang untuk entri yang punya
+  keterangan tambahan, supaya entri yang sudah jelas tidak memunculkan gelembung tanpa isi baru.
 */
-function CollapsedHint({
+function NavHint({
   enabled,
   label,
+  hint,
   children,
 }: {
   enabled: boolean;
   label: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   if (!enabled) return <>{children}</>;
@@ -47,7 +58,10 @@ function CollapsedHint({
   return (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="right">{label}</TooltipContent>
+      <TooltipContent side="right" className="max-w-64">
+        <span className="block font-medium">{label}</span>
+        {hint ? <span className="text-muted-foreground block">{hint}</span> : null}
+      </TooltipContent>
     </Tooltip>
   );
 }
@@ -62,12 +76,16 @@ export function NavItem({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const { label, href, Icon, status } = entry;
+  const { label, href, Icon, status, hint } = entry;
+
+  /* Entri yang punya keterangan selalu memunculkan tooltip; entri tanpa keterangan hanya perlu
+     tooltip saat labelnya tidak terlihat. */
+  const hintVisible = collapsed || Boolean(hint);
 
   if (status === "planned") {
     // TODO: ubah jadi tautan begitu halamannya dibangun.
     return (
-      <CollapsedHint enabled={collapsed} label={`${label}, segera`}>
+      <NavHint enabled label={`${label}, segera`} hint={hint}>
         <span
           aria-disabled="true"
           className={cn(
@@ -86,14 +104,14 @@ export function NavItem({
             </>
           )}
         </span>
-      </CollapsedHint>
+      </NavHint>
     );
   }
 
   const active = pathname === href;
 
   return (
-    <CollapsedHint enabled={collapsed} label={label}>
+    <NavHint enabled={hintVisible} label={label} hint={hint}>
       <Link
         href={href}
         onClick={onNavigate}
@@ -112,6 +130,6 @@ export function NavItem({
           <span className="flex-1 truncate">{label}</span>
         )}
       </Link>
-    </CollapsedHint>
+    </NavHint>
   );
 }
