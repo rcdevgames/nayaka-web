@@ -23,7 +23,7 @@ import { verifyAdminAccessToken } from "@/lib/server/token";
   Cookie refresh yang dipalsukan hanya menghasilkan kerangka halaman kosong. Halaman itu akan
   menampilkan keadaan "sesi tidak dikenali" begitu permintaan datanya ditolak server.
 */
-const PUBLIC_PATHS = ["/login", "/design-system"];
+const PUBLIC_PATHS = ["/login"];
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
