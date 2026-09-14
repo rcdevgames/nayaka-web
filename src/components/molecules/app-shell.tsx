@@ -1,13 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import {
-  CaretDoubleLeftIcon,
-  CaretDoubleRightIcon,
-  ListIcon,
-  SignOutIcon,
-} from "@phosphor-icons/react/dist/ssr";
+import Image from "next/image";
+import { CaretDoubleLeftIcon, CaretDoubleRightIcon, ListIcon } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/atoms";
 import {
@@ -19,27 +13,46 @@ import {
 } from "@/components/ui/sheet";
 import { navEntries } from "@/lib/nav";
 import { cn } from "@/lib/utils";
-import { useSessionStore } from "@/stores/session-store";
 import { useShellStore } from "@/stores/ui-store";
 
 import { NavItem } from "./nav-item";
+import { ProfileMenu } from "./profile-menu";
 import { ThemeToggle } from "./theme-toggle";
 
 /*
-  Nama produk ditampilkan sebagai teks, bukan logo buatan.
-  Logo belum ditentukan pemilik produk, jadi tidak ada yang dikarang di sini.
+  Nama produk ditampilkan sebagai logo asli pemilik produk dari public/logos.
+  Varian dipilih menurut latar tempat logo diletakkan, bukan menurut tema halaman.
 */
 function Brand({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <div className={cn("flex items-center gap-2 px-2.5", collapsed && "justify-center px-0")}>
-      <span
-        aria-hidden
-        className="bg-foreground text-background grid size-7 shrink-0 place-items-center rounded-md text-[13px] font-semibold"
-      >
-        N
-      </span>
-      {collapsed ? null : (
-        <span className="text-sm font-semibold tracking-tight">Nayaka Admin</span>
+      {collapsed ? (
+        /* Saat sidebar menyempit hanya muat lambangnya, jadi lambang oranye yang dipakai, bukan
+           logo lengkap dengan tulisan yang akan terbaca sebagai bercak. */
+        <Image
+          src="/logos/nayaka-logo-badge.png"
+          alt="Nayaka Admin"
+          width={28}
+          height={28}
+          className="size-7 shrink-0 rounded-md"
+        />
+      ) : (
+        <>
+          <Image
+            src="/logos/nayaka-logo.png"
+            alt="Nayaka Admin"
+            width={132}
+            height={39}
+            className="h-7 w-auto dark:hidden"
+          />
+          <Image
+            src="/logos/nayaka-logo-white.png"
+            alt="Nayaka Admin"
+            width={132}
+            height={39}
+            className="hidden h-7 w-auto dark:block"
+          />
+        </>
       )}
     </div>
   );
@@ -71,24 +84,10 @@ function NavList({
   dan daftar menetap menjaga orientasi tanpa memakan tinggi tabel.
 */
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const collapsed = useShellStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useShellStore((state) => state.toggleSidebar);
   const mobileNavOpen = useShellStore((state) => state.mobileNavOpen);
   const setMobileNavOpen = useShellStore((state) => state.setMobileNavOpen);
-  const admin = useSessionStore((state) => state.admin);
-  const signOut = useSessionStore((state) => state.signOut);
-  const [isSigningOut, setIsSigningOut] = useState(false);
-
-  async function handleSignOut() {
-    setIsSigningOut(true);
-    try {
-      await signOut();
-      router.replace("/login");
-    } finally {
-      setIsSigningOut(false);
-    }
-  }
 
   return (
     <div className="admin-shell relative flex h-dvh flex-col overflow-hidden md:flex-row">
@@ -152,23 +151,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            {admin ? (
-              <div className="hidden min-w-0 max-w-48 text-right sm:block">
-                <p className="truncate text-sm font-medium">{admin.full_name || admin.email}</p>
-                <p className="text-muted-foreground truncate text-xs">Akun internal</p>
-              </div>
-            ) : null}
             <ThemeToggle />
-            <Button
-              variant="outline"
-              onClick={() => void handleSignOut()}
-              disabled={isSigningOut}
-              aria-label="Keluar dari Nayaka Admin"
-              className="gap-2"
-            >
-              <SignOutIcon aria-hidden weight="regular" className="size-4" />
-              <span className="hidden sm:inline">{isSigningOut ? "Keluar..." : "Keluar"}</span>
-            </Button>
+            <ProfileMenu />
           </div>
         </header>
 
