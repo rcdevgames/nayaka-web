@@ -2,19 +2,27 @@
 
 import { DownloadSimpleIcon } from "@phosphor-icons/react";
 import Link from "next/link";
+import { useState } from "react";
 
 import { Button, Money } from "@/components/atoms";
 import {
+  BarGrup,
+  BarSeries,
+  ChartCard,
   ErrorState,
+  GranularityPicker,
   LoadingState,
   PageHeader,
+  Pagination,
   PeriodPicker,
   StatCard,
+  type Granularitas,
   type Period,
+  type Titik,
 } from "@/components/molecules";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, formatRupiah } from "@/lib/format";
 import { REPORT_LABELS } from "@/lib/report-labels";
-import { useApiQuery } from "@/lib/use-api";
+import { useApiQuery, useClientPage } from "@/lib/use-api";
 
 /*
   Satu laporan.
@@ -22,6 +30,11 @@ import { useApiQuery } from "@/lib/use-api";
   Bentuk response semua jenis laporan seragam: `columns` menentukan urutan dan label kolom,
   sehingga halaman ini tidak perlu mengetahui bentuk tiap jenis. Menambah jenis laporan baru
   berarti menambah satu penyusun di sisi server, tanpa mengubah berkas ini.
+
+  Grafik ditampilkan untuk jenis laporan yang isinya angka per periode, dan digambar dari baris
+  yang sama dengan tabel di bawahnya. Grafik yang dihitung dari query terpisah akan cepat atau
+  lambat berbeda dari tabelnya, dan pembaca yang menemukan selisih itu berhenti mempercayai
+  keduanya.
 
   Kalimat `definition` wajib ditampilkan di bawah judul. Angka pendapatan tanpa keterangan dasar
   perhitungan mudah disalahartikan: pembaca akan mengira itu uang yang masuk ke rekening, padahal
@@ -53,13 +66,22 @@ export function ReportView({ type, period, onPeriodChange }: {
   period: Period;
   onPeriodChange: (next: Period) => void;
 }) {
+  const [granularity, setGranularity] = useState<Granularitas>("day");
+
+  /*
+    Rentang tanggal dan granularitas ikut menentukan permintaan, jadi keduanya dikirim sebagai
+    parameter hook. useApiQuery memperlakukan parameter awal sebagai nilai terkendali: setiap kali
+    nilainya berubah, permintaan baru berangkat sendiri. Karena itu tidak ada efek penyelaras di
+    halaman ini, dan tidak ada kesempatan rentang di layar berbeda dari rentang datanya.
+  */
   const query = useApiQuery<Payload>(`/api/v1/admin/reports/${type}`, {
     from: period.from,
     to: period.to,
-    granularity: "day",
+    granularity,
   });
 
   const label = REPORT_LABELS[type] ?? { title: type, description: "" };
+  const adaGrafik = Boolean(query.data?.granularity_applies);
 
   return (
     <div className="flex flex-col gap-6">
@@ -74,7 +96,7 @@ export function ReportView({ type, period, onPeriodChange }: {
               berkas yang perlu disimpan di memori halaman ini.
             */}
             <a
-              href={`/api/v1/admin/reports/${type}/export.csv?from=${period.from}&to=${period.to}&granularity=day`}
+              href={`/api/v1/admin/reports/${type}/export.csv?from=${period.from}&to=${period.to}&granularity=${granularity}`}
             >
               <DownloadSimpleIcon aria-hidden className="size-4" />
               Unduh CSV
@@ -83,12 +105,26 @@ export function ReportView({ type, period, onPeriodChange }: {
         }
       />
 
-      <PeriodPicker
-        value={period}
-        onChange={onPeriodChange}
-        onReload={query.reload}
-        loading={query.status === "memuat"}
-      />
+      <div className="flex flex-col gap-3">
+        <PeriodPicker
+          value={period}
+          onChange={onPeriodChange}
+          onReload={query.reload}
+          loading={query.status === "memuat"}
+        />
+        {/*
+          Pemilih pengelompokan hanya muncul untuk laporan yang memang punya arti per periode.
+          Menampilkannya di laporan berupa daftar objek akan menyiratkan kontrol yang tidak
+          mengubah apa pun.
+        */}
+        {adaGrafik ? (
+          <GranularityPicker
+            value={granularity}
+            onChange={setGranularity}
+            loading={query.status === "memuat"}
+          />
+        ) : null}
+      </div>
 
       {query.status === "memuat" ? (
         <LoadingState label={`Memuat laporan ${label.title.toLowerCase()}`} />
@@ -121,6 +157,13 @@ export function ReportView({ type, period, onPeriodChange }: {
 }
 
 function ReportBody({ data, type }: { data: Payload; type: string }) {
+  /*
+    Laporan bisa memuat ratusan baris: satu tahun pada pengelompokan harian berarti 365 baris.
+    Seluruh barisnya sudah terkirim bersama laporan ini, jadi halaman memotongnya di sini
+    ketimbang meminta ulang per halaman: permintaan kedua akan menghitung ulang seluruh
+    laporan untuk mendapatkan potongan yang sama.
+  */
+  const halaman = useClientPage(data.rows, 20);
   return (
     <>
       <section className="flex flex-col gap-2">
@@ -156,6 +199,8 @@ function ReportBody({ data, type }: { data: Payload; type: string }) {
         </section>
       ) : null}
 
+      <GrafikLaporan data={data} type={type} />
+
       {data.rows.length === 0 ? (
         <section className="bg-card flex flex-col gap-2 rounded-xl border border-border p-4">
           <h2 className="text-base font-semibold">Tidak ada baris pada periode ini</h2>
@@ -170,7 +215,7 @@ function ReportBody({ data, type }: { data: Payload; type: string }) {
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <h2 className="text-base font-semibold">Rincian</h2>
             <span className="text-muted-foreground text-[13px]">
-              {formatNumber(data.rows.length)} baris
+              {formatNumber(data.rows.length)} baris pada periode ini
             </span>
           </div>
           <div className="overflow-x-auto">
@@ -189,7 +234,7 @@ function ReportBody({ data, type }: { data: Payload; type: string }) {
                 </tr>
               </thead>
               <tbody>
-                {data.rows.map((row, index) => (
+                {halaman.rows.map((row, index) => (
                   <tr
                     key={`${String(row[data.columns[0]?.key ?? "id"])}-${index}`}
                     className="border-b border-border last:border-0"
@@ -226,12 +271,23 @@ function ReportBody({ data, type }: { data: Payload; type: string }) {
               ) : null}
             </table>
           </div>
+
+          <Pagination
+            page={halaman.page}
+            limit={halaman.limit}
+            shown={halaman.rows.length}
+            unit="baris"
+            hasMore={halaman.hasMore}
+            onPrev={halaman.prevPage}
+            onNext={halaman.nextPage}
+            onLimitChange={halaman.setLimit}
+          />
         </section>
       )}
 
       {data.granularity_applies ? (
         <p className="text-muted-foreground text-[13px] leading-relaxed">
-          Dikelompokkan per hari, minggu, atau bulan sesuai pilihan, memakai batas hari waktu
+          Dikelompokkan per {sebutGranularitas(data.granularity)}, memakai batas hari waktu
           Jakarta. Batas yang memakai UTC akan memindahkan transaksi tengah malam ke tanggal yang
           salah.
         </p>
@@ -245,6 +301,122 @@ function ReportBody({ data, type }: { data: Payload; type: string }) {
   );
 }
 
+function sebutGranularitas(granularity: string | null): string {
+  if (granularity === "week") return "minggu";
+  if (granularity === "month") return "bulan";
+  return "hari";
+}
+
+/*
+  Grafik laporan.
+
+  Bentuk grafiknya mengikuti jenis datanya, bukan selera. Pendapatan dan refund adalah nilai uang
+  per periode, jadi yang dibaca adalah besar tiap periode; grafik batang menuliskannya lebih
+  jujur daripada garis, karena tidak menyiratkan kesinambungan di antara periode. Pertumbuhan
+  berisi dua deret sejenis dengan satuan yang sama, jadi keduanya digabung dalam satu grafik
+  supaya bisa dibandingkan langsung.
+*/
+function GrafikLaporan({ data, type }: { data: Payload; type: string }) {
+  if (!data.granularity_applies) return null;
+
+  if (type === "revenue") {
+    const titik: Titik[] = data.rows.map((row) => ({
+      label: String(row.bucket ?? ""),
+      value: Number(row.amount ?? 0),
+    }));
+    const total = titik.reduce((jumlah, item) => jumlah + item.value, 0);
+
+    return (
+      <ChartCard
+        judul={`Pendapatan per ${sebutGranularitas(data.granularity)}`}
+        keterangan="Digambar dari baris yang sama dengan tabel di bawah, sehingga angka grafik dan tabelnya tidak pernah berbeda."
+      >
+        <BarSeries
+          data={titik}
+          tone="revenue"
+          satuan="rupiah"
+          formatNilai={(value) => formatNumber(value)}
+          granularity={data.granularity ?? undefined}
+          pesanKosong={{
+            title: "Belum ada pendapatan pada periode ini",
+            description:
+              "Tidak ada pembayaran yang diterima pada rentang yang dipilih, jadi tidak ada yang bisa digambarkan.",
+          }}
+          labelAkses={`Pendapatan per ${sebutGranularitas(data.granularity)} dari ${data.period.from} sampai ${data.period.to}. Total ${formatRupiah(total)}.`}
+        />
+      </ChartCard>
+    );
+  }
+
+  if (type === "refunds") {
+    const titik: Titik[] = data.rows.map((row) => ({
+      label: String(row.bucket ?? ""),
+      value: Number(row.amount ?? 0),
+    }));
+    const total = titik.reduce((jumlah, item) => jumlah + item.value, 0);
+
+    return (
+      <ChartCard
+        judul={`Refund per ${sebutGranularitas(data.granularity)}`}
+        keterangan="Hanya refund yang sudah selesai dihitung, karena dana yang belum berpindah belum bisa diakui."
+      >
+        <BarSeries
+          data={titik}
+          tone="receivables"
+          satuan="rupiah"
+          formatNilai={(value) => formatNumber(value)}
+          granularity={data.granularity ?? undefined}
+          pesanKosong={{
+            title: "Belum ada refund pada periode ini",
+            description:
+              "Tidak ada refund yang selesai pada rentang yang dipilih, jadi tidak ada yang bisa digambarkan.",
+          }}
+          labelAkses={`Refund per ${sebutGranularitas(data.granularity)} dari ${data.period.from} sampai ${data.period.to}. Total ${formatRupiah(total)}.`}
+        />
+      </ChartCard>
+    );
+  }
+
+  if (type === "growth") {
+    const titik = data.rows.map((row) => ({
+      label: String(row.bucket ?? ""),
+      values: [Number(row.new_customers ?? 0), Number(row.new_subscriptions ?? 0)],
+    }));
+    const totalPelanggan = titik.reduce((jumlah, item) => jumlah + item.values[0], 0);
+    const totalLangganan = titik.reduce((jumlah, item) => jumlah + item.values[1], 0);
+
+    return (
+      <ChartCard
+        judul={`Pelanggan dan langganan baru per ${sebutGranularitas(data.granularity)}`}
+        keterangan="Kedua deret memakai rentang dan pengelompokan yang sama, sehingga batangnya sejajar dan bisa dibandingkan langsung."
+      >
+        <BarGrup
+          data={titik}
+          seri={[
+            { label: "Pelanggan baru", tone: "customers" },
+            { label: "Langganan baru", tone: "subscriptions" },
+          ]}
+          satuan="orang"
+          granularity={data.granularity ?? undefined}
+          pesanKosong={{
+            title: "Belum ada pelanggan atau langganan baru",
+            description:
+              "Tidak ada pendaftaran pelanggan maupun langganan baru pada rentang yang dipilih.",
+          }}
+          labelAkses={`Pelanggan baru ${totalPelanggan} orang dan langganan baru ${totalLangganan} per ${sebutGranularitas(data.granularity)} dari ${data.period.from} sampai ${data.period.to}.`}
+        />
+      </ChartCard>
+    );
+  }
+
+  /*
+    Jenis laporan lain tidak digambarkan. Isinya daftar objek, bukan angka per periode, dan
+    memaksakan grafik di atasnya hanya akan menghasilkan gambar yang tidak menjawab pertanyaan
+    apa pun.
+  */
+  return null;
+}
+
 /*
   Nilai null ditulis apa adanya sebagai belum dapat dihitung. Menuliskannya sebagai nol akan
   mengubah artinya dari "belum ada yang bisa dihitung" menjadi "hasil hitungannya nol".
@@ -256,10 +428,25 @@ function nilaiTeks(value: number | null, format: string): string | null {
   return String(value);
 }
 
-function satuanUntuk(label: string, format: string): string {
+/*
+  Satuan ditulis berdasarkan bentuk angkanya, bukan labelnya saja.
+
+  Sebelumnya semua label yang tidak mengandung "tingkat" memakai kalimat tentang pembagian, dan
+  itu salah untuk sebagian besar kartu: "Pelanggan baru" dan "Periode ada isinya" bukan hasil
+  pembagian apa pun. Keterangan yang keliru lebih buruk daripada tidak ada keterangan, karena
+  pembaca akan mencarikan penyebut yang tidak pernah ada.
+*/
+function satuanUntuk(label: string, format: string): string | undefined {
+  const kecil = label.toLowerCase();
   if (format === "currency") return "Dalam rupiah, tanpa biaya layanan penyedia";
-  if (label.toLowerCase().includes("tingkat")) return "Dalam persen";
-  return "Belum dapat dihitung bila tidak ada data untuk dibagi";
+  if (kecil.includes("tingkat")) return "Dalam persen";
+  if (kecil.includes("rasio")) return "Dalam persen, dihitung per periode";
+  if (kecil.includes("rata-rata")) {
+    return kecil.includes("per periode")
+      ? "Dibagi jumlah periode pada rentang ini"
+      : "Dibagi jumlah data pada rentang ini";
+  }
+  return undefined;
 }
 
 function selTabel(value: unknown, format?: string): React.ReactNode {

@@ -125,6 +125,26 @@
   --sidebar-accent-foreground: #c2410c;
   --sidebar-border: #e4e4e7;
   --sidebar-ring: #c2410c;
+
+  /*
+    Warna grafik.
+
+    Dipisahkan dari warna status karena tugasnya berbeda: warna status menandai keadaan
+    (berhasil, menunggu, gagal), sedangkan warna grafik memisahkan deret angka. Memakai ulang
+    warna status di grafik akan membuat deret biasa terbaca sebagai peringatan.
+
+    Urutannya tetap di seluruh panel: pendapatan oranye, pelanggan biru, langganan hijau,
+    perangkat ungu, piutang teal. Pembaca yang berpindah grafik tidak perlu membaca ulang
+    keterangannya.
+
+    Semua sudah diperiksa terhadap permukaan kartu dan latar halaman pada ambang 3:1, yaitu
+    ambang untuk elemen grafis. Nilai terendah adalah hijau di latar halaman, 4.56:1.
+  */
+  --chart-1: #c2410c;
+  --chart-2: #1d4ed8;
+  --chart-3: #15803d;
+  --chart-4: #7c3aed;
+  --chart-5: #0e7490;
 }
 
 .dark {
@@ -182,6 +202,17 @@
   --sidebar-accent-foreground: #f97316;
   --sidebar-border: #3f3f46;
   --sidebar-ring: #f97316;
+
+  /*
+    Warna grafik tema gelap memakai versi terang dari tiap warna, bukan versi tema terang.
+    Nilai tema terang di atas latar #18181b hanya mencapai 3.1:1, terlalu dekat dengan ambang
+    untuk elemen setipis garis grafik. Nilai di bawah berkisar 6.3:1 sampai 10.2:1.
+  */
+  --chart-1: #f97316;
+  --chart-2: #60a5fa;
+  --chart-3: #4ade80;
+  --chart-4: #a78bfa;
+  --chart-5: #22d3ee;
 }
 
 /*
