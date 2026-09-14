@@ -14,6 +14,7 @@ import {
   EmptyState,
   FilterBar,
   PageHeader,
+  Pagination,
   SelectField,
   StatCard,
   StatusBadge,
@@ -38,7 +39,7 @@ import {
   priceAmount,
   type CreatePlanInput,
 } from "@/lib/schemas/admin-plan";
-import { mutate, tableStatus, useApiQuery } from "@/lib/use-api";
+import { mutate, tableStatus, usePagedQuery } from "@/lib/use-api";
 import { useSessionStore } from "@/stores/session-store";
 
 /*
@@ -129,7 +130,7 @@ function amountForInput(value: string): string {
 }
 
 export function PlanList() {
-  const query = useApiQuery<PlansResponse>("/api/v1/admin/subscription-plans");
+  const query = usePagedQuery<PlansResponse>("/api/v1/admin/subscription-plans");
 
   /*
     Izin dibaca sebagai potongan state, bukan lewat hasPermission(), karena fungsi itu membaca
@@ -330,6 +331,17 @@ export function PlanList() {
             />
           )
         }
+      />
+
+      <Pagination
+        page={query.page}
+        limit={query.limit}
+        shown={rows.length}
+        unit="paket"
+        hasMore={query.hasMore}
+        onPrev={query.prevPage}
+        onNext={query.nextPage}
+        onLimitChange={query.setLimit}
       />
 
       <section className="bg-card flex flex-col gap-2 rounded-xl border border-border p-4">

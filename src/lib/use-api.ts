@@ -20,6 +20,14 @@ import { csrfHeader, ensureCsrfToken } from "@/stores/session-store";
   berdasarkan angka nol yang sebenarnya tidak pernah diketahui.
 */
 
+/*
+  Ukuran halaman yang boleh dipilih operator.
+
+  Batas atasnya 100, mengikuti API_Contract.md. Angka di luar daftar ini ditolak server, jadi
+  pilihannya sengaja ditutup supaya tidak ada nilai yang ditawarkan tetapi ditolak.
+*/
+export const PAGE_SIZES = [20, 50, 100] as const;
+
 export type DataState<T> = {
   status: "memuat" | "siap" | "galat";
   data: T | null;
@@ -27,6 +35,27 @@ export type DataState<T> = {
   /** Kode galat dari server, dipakai membedakan izin kurang dari kegagalan lain. */
   errorCode: string | null;
   requestId: string | null;
+  /**
+   * Meta dari envelope response: request_id dan, untuk endpoint daftar, pagination.
+   *
+   * Sebelumnya bagian ini dibuang begitu saja, sehingga halaman daftar kehilangan satu-satunya
+   * keterangan tentang apakah masih ada baris berikutnya di server.
+   */
+  meta: ApiMeta | null;
+};
+
+/*
+  Bentuk pagination yang ditetapkan API_Contract.md: cursor buram, bukan nomor halaman.
+*/
+export type PageMeta = {
+  next_cursor: string | null;
+  has_more: boolean;
+  limit: number;
+};
+
+export type ApiMeta = {
+  request_id?: string;
+  pagination?: PageMeta;
 };
 
 export type DataQuery<T> = DataState<T> & {
@@ -62,6 +91,24 @@ export function useApiQuery<T>(
   const [reloadToken, setReloadToken] = useState(0);
 
   /*
+    Parameter awal diperlakukan sebagai nilai terkendali, bukan sekadar nilai pertama.
+
+    Sebelumnya `initialParams` hanya dibaca sekali pada render pertama, sehingga pemanggil yang
+    menurunkan parameternya dari state (misalnya rentang tanggal di halaman laporan) mengubah
+    tampilan tanpa memicu permintaan baru: tanggal di layar berubah, isinya tetap periode lama.
+
+    Perbandingan memakai bentuk serialnya, bukan identitas objek, karena setiap pemanggil
+    menuliskan literal objek baru di setiap render. Tanpa itu, penulisan state akan berulang
+    tanpa henti.
+  */
+  const initialKey = buildUrl("", initialParams);
+  const [appliedInitialKey, setAppliedInitialKey] = useState(initialKey);
+  if (initialKey !== appliedInitialKey) {
+    setAppliedInitialKey(initialKey);
+    setParamsState(initialParams);
+  }
+
+  /*
     Hasil disimpan bersama kunci permintaannya, bukan sekadar nilainya.
 
     Alasannya: keadaan "sedang memuat" tidak perlu disetel, ia disimpulkan. Selama hasil yang
@@ -75,6 +122,7 @@ export function useApiQuery<T>(
     error: string | null;
     errorCode: string | null;
     requestId: string | null;
+    meta: ApiMeta | null;
   } | null>(null);
 
   const key = `${url}?${buildUrl("", params)}#${reloadToken}`;
@@ -90,6 +138,7 @@ export function useApiQuery<T>(
         error: string | null;
         errorCode: string | null;
         requestId: string | null;
+        meta: ApiMeta | null;
       };
 
       try {
@@ -100,7 +149,11 @@ export function useApiQuery<T>(
         });
 
         const body = (await response.json().catch(() => null)) as
-          | { data?: T; error?: { code: string; message: string; request_id?: string } }
+          | {
+              data?: T;
+              meta?: ApiMeta;
+              error?: { code: string; message: string; request_id?: string };
+            }
           | null;
 
         if (!response.ok || !body || body.error) {
@@ -110,6 +163,7 @@ export function useApiQuery<T>(
             error: body?.error?.message ?? "Server tidak mengirim keterangan galat.",
             errorCode: body?.error?.code ?? null,
             requestId: body?.error?.request_id ?? null,
+            meta: null,
           };
         } else {
           next = {
@@ -118,6 +172,7 @@ export function useApiQuery<T>(
             error: null,
             errorCode: null,
             requestId: null,
+            meta: body.meta ?? null,
           };
         }
       } catch (error) {
@@ -132,6 +187,7 @@ export function useApiQuery<T>(
           error: toErrorMessage(error),
           errorCode: "NETWORK_ERROR",
           requestId: null,
+          meta: null,
         };
       }
 
@@ -161,9 +217,176 @@ export function useApiQuery<T>(
     error: fresh?.error ?? null,
     errorCode: fresh?.errorCode ?? null,
     requestId: fresh?.requestId ?? null,
+    meta: fresh?.meta ?? null,
     reload,
     setParams,
     params,
+  };
+}
+
+/*
+  Hook daftar ber-paginasi cursor.
+
+  Server sudah mengirim `meta.pagination` sejak awal, tetapi dulu dibuang di klien sehingga halaman
+  daftar hanya bisa menampilkan baris pertama tanpa cara mengambil sisanya.
+
+  Bentuknya cursor, bukan nomor halaman, jadi "kembali" tidak bisa dihitung dari nomor: tumpukan
+  cursor disimpan di sini. Setiap halaman berikutnya menyimpan cursor yang dipakai untuk
+  mencapainya, sehingga mundur memakai posisi yang benar-benar pernah dibuka.
+
+  Filter yang datang dari FilterBar tidak boleh menghapus `limit` dan `cursor`. Karena itu
+  filter disimpan terpisah dari parameter yang dikirim ke server, lalu digabung saat meminta.
+  Tanpa pemisahan ini, satu perubahan filter akan mengembalikan ukuran halaman ke nilai awal dan
+  membuat daftar melompat kembali ke halaman pertama tanpa penjelasan.
+*/
+export function usePagedQuery<T>(
+  url: string,
+  options: {
+    limit?: number;
+    params?: Record<string, string | number | undefined>;
+    /**
+     * Menerjemahkan nilai filter mentah dari FilterBar menjadi parameter yang dikenali server,
+     * misalnya tanggal polos menjadi waktu lengkap. Bila tidak diisi, nilai diteruskan apa adanya.
+     */
+    mapParams?: (
+      values: Record<string, string | number | undefined>,
+    ) => Record<string, string | number | undefined>;
+  } = {},
+): DataQuery<T> & {
+  page: number;
+  limit: number;
+  setLimit: (limit: number) => void;
+  hasMore: boolean;
+  nextPage: () => void;
+  prevPage: () => void;
+  resetPage: () => void;
+} {
+  const [limit, setLimitState] = useState(options.limit ?? PAGE_SIZES[0]);
+  const [filters, setFilters] = useState<Record<string, string | number | undefined>>(
+    options.params ?? {},
+  );
+  const [cursor, setCursor] = useState<string | null>(null);
+  /* trail[n] adalah cursor yang dipakai untuk mencapai halaman n+1. Halaman 1 selalu null. */
+  const [trail, setTrail] = useState<(string | null)[]>([null]);
+  const [page, setPage] = useState(1);
+
+  const mapParams = options.mapParams;
+  const queryParams = mapParams ? mapParams(filters) : filters;
+
+  const query = useApiQuery<T>(url, {
+    ...queryParams,
+    limit,
+    ...(cursor ? { cursor } : {}),
+  });
+
+  /*
+    Mengganti filter berarti kumpulan barisnya berubah, sehingga posisi cursor yang lama tidak lagi
+    menunjuk ke tempat yang sama. Penyetelan cursor dan filter terjadi dalam satu handler yang sama
+    supaya React menggabungkannya menjadi satu render: kalau terpisah, akan ada satu permintaan
+    yang berangkat membawa filter baru bersama cursor lama.
+  */
+  const setParams = useCallback((next: Record<string, string | number | undefined>) => {
+    setFilters(next);
+    setCursor(null);
+    setTrail([null]);
+    setPage(1);
+  }, []);
+
+  const resetPage = useCallback(() => {
+    setCursor(null);
+    setTrail([null]);
+    setPage(1);
+  }, []);
+
+  const setLimit = useCallback(
+    (next: number) => {
+      setLimitState(next);
+      resetPage();
+    },
+    [resetPage],
+  );
+
+  const pagination = query.meta?.pagination;
+
+  const nextPage = useCallback(() => {
+    const nextCursor = pagination?.next_cursor;
+    if (!nextCursor) return;
+    setCursor(nextCursor);
+    setTrail((history) => [...history, nextCursor]);
+    setPage((value) => value + 1);
+  }, [pagination?.next_cursor]);
+
+  const prevPage = useCallback(() => {
+    if (page <= 1) return;
+    setCursor(trail[page - 2] ?? null);
+    setPage((value) => value - 1);
+  }, [page, trail]);
+
+  return {
+    ...query,
+    setParams,
+    page,
+    limit,
+    setLimit,
+    hasMore: Boolean(pagination?.has_more),
+    nextPage,
+    prevPage,
+    resetPage,
+  };
+}
+
+/*
+  Paginasi sisi klien untuk tabel yang datanya sudah dimuat seluruhnya.
+
+  Sebagian endpoint mengirim seluruh barisnya sekaligus dan bukan ber-paginasi cursor: log
+  provider dipatok 50 baris per arah di server, baris laporan mengikuti rentang tanggal yang
+  dipilih, dan daftar izin adalah katalog tertutup. Untuk daftar seperti itu, memotong barisnya di
+  klien lebih tepat daripada menambah paginasi cursor di server: datanya sudah ada di memori, dan
+  yang dibutuhkan hanya cara menyusurinya tanpa menggulir ratusan baris.
+*/
+export function useClientPage<T>(
+  rows: T[],
+  initialLimit: number = PAGE_SIZES[0],
+): {
+  rows: T[];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+  setLimit: (limit: number) => void;
+  nextPage: () => void;
+  prevPage: () => void;
+} {
+  const [limit, setLimitState] = useState(initialLimit);
+  const [page, setPage] = useState(1);
+
+  const total = rows.length;
+  const lastPage = Math.max(1, Math.ceil(total / limit));
+  /* Halaman yang melewati ujung terjadi saat data menyusut, misalnya setelah filter diganti. */
+  const safePage = Math.min(page, lastPage);
+
+  const start = (safePage - 1) * limit;
+
+  const setLimit = useCallback((next: number) => {
+    setLimitState(next);
+    setPage(1);
+  }, []);
+
+  const nextPage = useCallback(() => {
+    setPage((value) => Math.min(value + 1, Math.ceil(total / limit) || 1));
+  }, [total, limit]);
+
+  const prevPage = useCallback(() => setPage((value) => Math.max(1, value - 1)), []);
+
+  return {
+    rows: rows.slice(start, start + limit),
+    page: safePage,
+    limit,
+    total,
+    hasMore: start + limit < total,
+    setLimit,
+    nextPage,
+    prevPage,
   };
 }
 

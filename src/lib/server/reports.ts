@@ -20,6 +20,12 @@ import { query, type Queryable } from "./db";
 export { REPORT_TYPES, type ReportType } from "@/lib/report-labels";
 
 import type { ReportType } from "@/lib/report-labels";
+/*
+  Deret pertumbuhan diambil dari modul dashboard, bukan dihitung ulang di sini. Angka pelanggan
+  dan langganan baru pada laporan harus sama persis dengan grafik di dashboard, dan dua query
+  terpisah untuk angka yang sama cepat atau lambat akan berbeda.
+*/
+import { businessSeries } from "./dashboard";
 
 export type ReportColumn = { key: string; label: string; format?: "number" | "currency" | "text" };
 
@@ -676,11 +682,104 @@ async function refundsReport(
   };
 }
 
+/*
+  Pertumbuhan.
+
+  Berisi rincian per periode dari grafik pelanggan dan langganan baru di dashboard. Dashboard
+  hanya menampilkan bentuk grafiknya; yang membutuhkan angka tiap periode ada di sini.
+
+  Deretnya diambil dari fungsi yang sama dengan yang mengisi dashboard (`businessSeries`), bukan
+  query baru. Dua query terpisah untuk angka yang sama cepat atau lambat akan berbeda, dan
+  pembaca yang menemukan selisih antara dashboard dan laporan berhenti mempercayai keduanya.
+*/
+async function growth(
+  ctx: Ctx,
+  executor?: Queryable,
+): Promise<Omit<ReportPayload, "type" | "period">> {
+  const rows = await businessSeries(
+    { from: ctx.from, to: ctx.to, granularity: ctx.granularity },
+    executor,
+  );
+
+  const totalPelanggan = rows.reduce((jumlah, row) => jumlah + row.new_customers, 0);
+  const totalLangganan = rows.reduce((jumlah, row) => jumlah + row.new_subscriptions, 0);
+  const periodeAda = rows.filter(
+    (row) => row.new_customers > 0 || row.new_subscriptions > 0,
+  ).length;
+
+  return {
+    definition:
+      "Pelanggan baru dihitung dari tanggal pelanggan mendaftar (customers.created_at), dan " +
+      "langganan baru dari tanggal langganannya mulai (subscriptions.created_at). Keduanya " +
+      "dikelompokkan memakai batas hari waktu Jakarta, sehingga pendaftaran tengah malam tidak " +
+      "berpindah ke tanggal yang salah. Pelanggan yang berhenti tidak dikurangkan di sini; yang " +
+      "diukur adalah berapa yang masuk pada tiap periode.",
+    summary: [
+      { label: "Pelanggan baru", value: totalPelanggan, format: "number" },
+      { label: "Langganan baru", value: totalLangganan, format: "number" },
+      {
+        label: "Periode yang ada isinya",
+        value: periodeAda,
+        format: "number",
+      },
+      {
+        label: "Rata-rata pelanggan baru per periode",
+        /*
+          Penyebut kosong berarti belum dapat dihitung, bukan nol. Rentang tanpa satu pun
+          periode akan menghasilkan pembagian dengan nol.
+
+          Dua angka di belakang koma, bukan satu. Pada laporan harian, satu pelanggan baru dalam
+          tiga puluh hari menghasilkan 0,03; pembulatan ke satu angka desimal mengubahnya menjadi
+          nol, dan nol terbaca sebagai "tidak ada pelanggan baru" padahal ada satu.
+        */
+        value:
+          rows.length === 0 ? null : Math.round((totalPelanggan / rows.length) * 100) / 100,
+        format: "number",
+      },
+    ],
+    columns: [
+      { key: "bucket", label: "Periode", format: "text" },
+      { key: "new_customers", label: "Pelanggan baru", format: "number" },
+      { key: "new_subscriptions", label: "Langganan baru", format: "number" },
+      {
+        key: "conversion_percent",
+        label: "Rasio langganan per pelanggan",
+        format: "number",
+      },
+    ],
+    rows: rows.map((row) => ({
+      bucket: row.bucket,
+      new_customers: row.new_customers,
+      new_subscriptions: row.new_subscriptions,
+      /*
+        Rasio dihitung per periode. Periode tanpa pelanggan baru menghasilkan null, bukan nol,
+        karena tidak ada yang bisa dibagi. Nol di situ akan terbaca sebagai "tidak ada yang
+        berlangganan", padahal artinya "tidak ada pelanggan baru untuk dibagi".
+      */
+      conversion_percent:
+        row.new_customers === 0
+          ? null
+          : Math.round((row.new_subscriptions / row.new_customers) * 1000) / 10,
+    })),
+    totals: {
+      new_customers: totalPelanggan,
+      new_subscriptions: totalLangganan,
+    },
+    notes: [
+      totalPelanggan === 0 && totalLangganan === 0
+        ? "Belum ada pelanggan maupun langganan baru pada rentang ini, sehingga seluruh periode bernilai nol."
+        : "Rasio langganan per pelanggan dihitung dari pelanggan baru pada periode yang sama, bukan dari seluruh pelanggan yang pernah terdaftar.",
+      "Pelanggan yang mendaftar tanpa langsung berlangganan tetap dihitung sebagai pelanggan baru, sehingga rasio ini bisa lebih kecil dari seratus persen.",
+    ],
+  };
+}
+
 const BUILDERS: Record<
   ReportType,
   (ctx: Ctx, executor?: Queryable) => Promise<Omit<ReportPayload, "type" | "period">>
 > = {
   revenue,
+  growth,
   receivables,
   subscriptions: subscriptionsReport,
   devices: devicesReport,
@@ -689,7 +788,7 @@ const BUILDERS: Record<
 };
 
 export function reportNeedsGranularity(type: ReportType): boolean {
-  return type === "revenue" || type === "refunds";
+  return type === "revenue" || type === "refunds" || type === "growth";
 }
 
 export async function buildReport(

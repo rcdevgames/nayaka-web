@@ -9,13 +9,14 @@ import {
   EmptyState,
   FilterBar,
   PageHeader,
+  Pagination,
   StatCard,
   StatusLabel,
   statusTone,
   type FilterDefinition,
 } from "@/components/molecules";
 import { formatNumber } from "@/lib/format";
-import { tableStatus, useApiQuery } from "@/lib/use-api";
+import { tableStatus, usePagedQuery } from "@/lib/use-api";
 
 /*
   Daftar pembayaran.
@@ -77,7 +78,7 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 export function PaymentList() {
-  const query = useApiQuery<Response>("/api/v1/admin/payments");
+  const query = usePagedQuery<Response>("/api/v1/admin/payments");
 
   const filters: FilterDefinition[] = [
     {
@@ -287,6 +288,17 @@ export function PaymentList() {
             />
           )
         }
+      />
+
+      <Pagination
+        page={query.page}
+        limit={query.limit}
+        shown={rows.length}
+        unit="pembayaran"
+        hasMore={query.hasMore}
+        onPrev={query.prevPage}
+        onNext={query.nextPage}
+        onLimitChange={query.setLimit}
       />
     </div>
   );

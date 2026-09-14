@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Money, Timestamp } from "@/components/atoms";
 import {
+  AreaSeries,
+  BarGrup,
+  BarKategori,
+  ChartCard,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -15,11 +19,19 @@ import {
   type Period,
 } from "@/components/molecules";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, formatRupiah } from "@/lib/format";
 import { useApiQuery } from "@/lib/use-api";
 
 /*
   Dashboard.
+
+  Halaman ini untuk melihat keadaan sekilas: beberapa angka kunci dan grafik yang menunjukkan
+  arahnya. Rincian per periode tidak ditampilkan di sini, melainkan di halaman laporan.
+
+  Alasannya ruang. Tabel rincian per hari di dashboard menuntut operator menggulir jauh untuk
+  sampai ke angka yang menentukan tindakan, sementara grafik menjawab pertanyaan yang sama sekali
+  pandang. Yang perlu dirinci per periode adalah pekerjaan analisis, dan tempatnya di laporan,
+  bukan di halaman yang dibuka setiap pagi.
 
   Tiga tab dipisah karena isinya berbeda dan tidak selalu dibuka bersamaan. Menggabungkannya
   menjadi satu permintaan berarti tab Bisnis selalu membayar biaya query tab Operasional, padahal
@@ -28,9 +40,8 @@ import { useApiQuery } from "@/lib/use-api";
   Setiap tab punya status memuat, galat, dan kosongnya sendiri, karena satu tab yang gagal tidak
   boleh membuat dua tab lain yang datanya sudah siap ikut tampil kosong.
 
-  Rentang tanggal dipilih di tingkat halaman dan hanya berlaku untuk tab Bisnis dan Keuangan.
-  Tab Operasional selalu memantau keadaan sejak tengah malam, karena tujuannya melihat apa yang
-  sedang terjadi, bukan menelusuri periode.
+  Rentang tanggal berlaku untuk tab Bisnis dan Keuangan. Tab Operasional selalu memantau keadaan
+  sejak tengah malam, karena tujuannya melihat apa yang sedang terjadi, bukan menelusuri periode.
 */
 
 type PeriodResponse = {
@@ -125,7 +136,7 @@ export function Dashboard() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Dashboard"
-        description="Keadaan pelanggan, keuangan, dan operasional. Setiap angka dihitung dari data nyata pada periode yang tertulis, bukan perkiraan."
+        description="Keadaan pelanggan, keuangan, dan operasional sekilas. Setiap angka dihitung dari data nyata pada periode yang tertulis, bukan perkiraan. Rincian per periode ada di halaman laporan."
       />
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -135,13 +146,13 @@ export function Dashboard() {
           <TabsTrigger value="operasional">Operasional</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="bisnis" className="pt-4">
+        <TabsContent value="bisnis" className="flex flex-col gap-6 pt-4">
           <BusinessTab period={period} onPeriodChange={setPeriod} />
         </TabsContent>
-        <TabsContent value="keuangan" className="pt-4">
-          <FinanceTab period={period} />
+        <TabsContent value="keuangan" className="flex flex-col gap-6 pt-4">
+          <FinanceTab period={period} onPeriodChange={setPeriod} />
         </TabsContent>
-        <TabsContent value="operasional" className="pt-4">
+        <TabsContent value="operasional" className="flex flex-col gap-6 pt-4">
           <OperationsTab />
         </TabsContent>
       </Tabs>
@@ -161,10 +172,30 @@ function BusinessTab({
     to: period.to,
     granularity: "day",
   });
+  const { setParams } = query;
+  const { from, to } = period;
+
+  /*
+    Pilihan rentang tanggal diselaraskan dengan permintaan.
+
+    `useApiQuery` sengaja membaca `initialParams` sekali saja, karena objeknya selalu baru setiap
+    render. Halaman yang menyimpan pilihannya sendiri harus memberi tahu hook saat pilihannya
+    berubah. Tanpa efek ini, tanggal di layar berubah sementara grafiknya tetap menggambarkan
+    periode lama, dan itu jenis kesalahan yang paling sulit terlihat: angkanya benar, hanya bukan
+    untuk periode yang tertulis.
+  */
+  useEffect(() => {
+    setParams({ from, to, granularity: "day" });
+  }, [from, to, setParams]);
 
   return (
-    <div className="flex flex-col gap-6">
-      <PeriodPicker value={period} onChange={onPeriodChange} onReload={query.reload} loading={query.status === "memuat"} />
+    <>
+      <PeriodPicker
+        value={period}
+        onChange={onPeriodChange}
+        onReload={query.reload}
+        loading={query.status === "memuat"}
+      />
 
       {query.status === "memuat" ? (
         <LoadingState label="Memuat angka bisnis" />
@@ -175,14 +206,31 @@ function BusinessTab({
           onRetry={query.reload}
         />
       ) : (
-        <BusinessBody data={query.data} period={period} />
+        <BusinessBody data={query.data} />
       )}
-    </div>
+    </>
   );
 }
 
-function BusinessBody({ data, period }: { data: PeriodResponse; period: Period }) {
-  const { customers, subscriptions, devices, mrr, series } = data;
+function BusinessBody({ data }: { data: PeriodResponse }) {
+  const { customers, subscriptions, devices, mrr, series, period } = data;
+
+  const titikPendapatan = series.map((row) => ({
+    label: row.bucket,
+    value: Number(row.revenue),
+  }));
+  const titikPelanggan = series.map((row) => ({
+    label: row.bucket,
+    values: [row.new_customers, row.new_subscriptions],
+  }));
+  const perPaket = subscriptions.by_plan.map((row) => ({
+    label: row.plan_name,
+    value: row.active_count,
+  }));
+
+  const totalPendapatan = titikPendapatan.reduce((jumlah, titik) => jumlah + titik.value, 0);
+  const totalPelangganBaru = series.reduce((jumlah, row) => jumlah + row.new_customers, 0);
+  const totalLanggananBaru = series.reduce((jumlah, row) => jumlah + row.new_subscriptions, 0);
 
   return (
     <>
@@ -229,156 +277,135 @@ function BusinessBody({ data, period }: { data: PeriodResponse; period: Period }
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="bg-card flex flex-col gap-3 rounded-xl border border-border p-4">
-          <h2 className="text-base font-semibold">Pelanggan per paket</h2>
-          {subscriptions.by_plan.every((row) => row.active_count === 0) ? (
-            <EmptyState
-              title="Belum ada langganan aktif"
-              description="Paket tetap ditampilkan meski belum ada pelanggannya, supaya susunan paket yang tersedia terlihat. Pelanggan memilih paket dari aplikasi, bukan dari konsol ini."
-            />
-          ) : (
-            <table className="w-full text-[13px]">
-              <caption className="sr-only">Jumlah langganan aktif per paket</caption>
-              <thead>
-                <tr className="text-muted-foreground border-b border-border text-left">
-                  <th scope="col" className="py-2 pr-3 font-medium">Paket</th>
-                  <th scope="col" className="py-2 font-medium">Langganan aktif</th>
-                </tr>
-              </thead>
-              <tbody>
-                {subscriptions.by_plan.map((row) => (
-                  <tr key={row.plan_id} className="border-b border-border last:border-0">
-                    <td className="py-2.5 pr-3">{row.plan_name}</td>
-                    <td className="tabular py-2.5">{formatNumber(row.active_count)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
+        <ChartCard
+          judul="Pendapatan per hari"
+          keterangan="Diakui pada tanggal pembayaran diterima, tanpa biaya layanan penyedia pembayaran. Grafik ini menjawab pada hari mana pendapatan masuk, bukan berapa totalnya."
+          aksi={
+            <Link
+              href="/laporan/revenue"
+              className="text-[13px] underline-offset-4 hover:underline"
+            >
+              Rincian di laporan
+            </Link>
+          }
+        >
+          <AreaSeries
+            data={titikPendapatan}
+            tone="revenue"
+            satuan="rupiah"
+            formatNilai={(value) => formatNumber(value)}
+            granularity={period.granularity}
+            rujukan={{ nilai: totalPendapatan / Math.max(1, series.length), label: "Rata-rata" }}
+            pesanKosong={{
+              title: "Belum ada pendapatan pada periode ini",
+              description:
+                "Tidak ada pembayaran yang diterima antara tanggal yang dipilih. Paket gratis tidak menerbitkan tagihan, jadi periode tanpa pelanggan berbayar tampil seperti ini.",
+            }}
+            labelAkses={`Pendapatan harian dari ${period.from} sampai ${period.to}. Total ${formatRupiah(totalPendapatan)}.`}
+          />
+        </ChartCard>
 
-        <section className="bg-card flex flex-col gap-3 rounded-xl border border-border p-4">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-base font-semibold">Keadaan perangkat</h2>
-            <p className="text-muted-foreground text-[13px] leading-relaxed">
-              Perangkat dianggap terpasang setelah pelanggan mengklaimnya lewat aplikasi.
-              Perangkat yang sudah tidak dipakai pelanggan tetap dihitung sebagai pernah
-              terpasang, karena yang diukur adalah berapa banyak perangkat yang sampai ke
-              pelanggan.
-            </p>
-          </div>
-          <dl className="flex flex-col gap-2 text-[13px]">
-            <Row label="Terpasang di pelanggan" value={formatNumber(devices.claimed)} />
-            <Row label="Masih tersedia" value={formatNumber(devices.in_stock)} />
-            <Row label="Ditangguhkan" value={formatNumber(devices.suspended)} />
-            <Row
-              label="Tingkat klaim"
-              value={
-                devices.claim_rate_percent === null ? (
-                  <span className="text-muted-foreground">Belum dapat dihitung</span>
-                ) : (
-                  `${devices.claim_rate_percent}%`
-                )
-              }
-            />
-            <Row label="Pelanggan ditangguhkan" value={formatNumber(customers.suspended)} />
-          </dl>
-        </section>
+        <ChartCard
+          judul="Pelanggan dan langganan baru per hari"
+          keterangan="Dihitung dari tanggal pendaftaran dan tanggal langganan mulai. Keduanya memakai satu rentang dan satu pengelompokan, sehingga batangnya sejajar."
+          aksi={
+            <Link
+              href="/laporan/growth"
+              className="text-[13px] underline-offset-4 hover:underline"
+            >
+              Rincian di laporan
+            </Link>
+          }
+        >
+          <BarGrup
+            data={titikPelanggan}
+            seri={[
+              { label: "Pelanggan baru", tone: "customers" },
+              { label: "Langganan baru", tone: "subscriptions" },
+            ]}
+            satuan="orang"
+            granularity={period.granularity}
+            pesanKosong={{
+              title: "Belum ada pelanggan atau langganan baru",
+              description:
+                "Tidak ada pendaftaran pelanggan maupun langganan baru pada rentang yang dipilih.",
+            }}
+            labelAkses={`Pelanggan baru ${totalPelangganBaru} orang dan langganan baru ${totalLanggananBaru} pada periode ${period.from} sampai ${period.to}.`}
+          />
+        </ChartCard>
       </div>
 
-      <section className="bg-card flex flex-col gap-3 rounded-xl border border-border p-4">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-base font-semibold">Pendapatan harian</h2>
-          <p className="text-muted-foreground text-[13px] leading-relaxed">
-            Dihitung pada tanggal pembayaran diterima, dan nilainya adalah jumlah tagihan tanpa
-            biaya layanan penyedia pembayaran. Batas harinya mengikuti waktu Jakarta.
-          </p>
-        </div>
-
-        {series.every((row) => Number(row.revenue) === 0) ? (
-          <EmptyState
-            title="Belum ada pendapatan pada periode ini"
-            description="Tidak ada pembayaran yang diterima antara tanggal yang dipilih. Paket Gratis tidak menerbitkan tagihan, jadi periode tanpa pelanggan berbayar akan tampil seperti ini."
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[32rem] text-[13px]">
-              <caption className="sr-only">
-                Pendapatan harian pada periode yang dipilih
-              </caption>
-              <thead>
-                <tr className="text-muted-foreground border-b border-border text-left">
-                  <th scope="col" className="py-2 pr-3 font-medium">Tanggal</th>
-                  <th scope="col" className="py-2 pr-3 font-medium">Pelanggan baru</th>
-                  <th scope="col" className="py-2 pr-3 font-medium">Langganan baru</th>
-                  <th scope="col" className="py-2 font-medium">Pendapatan</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/*
-                  Hanya hari yang punya angka ditampilkan. Menampilkan seluruh 30 hari dengan
-                  mayoritas nol akan menyembunyikan hari yang benar-benar ada isinya.
-                */}
-                {series
-                  .filter(
-                    (row) =>
-                      Number(row.revenue) > 0 ||
-                      row.new_customers > 0 ||
-                      row.new_subscriptions > 0,
-                  )
-                  .map((row) => (
-                    <tr key={row.bucket} className="border-b border-border last:border-0">
-                      <td className="py-2.5 pr-3">
-                        <Timestamp value={`${row.bucket}T00:00:00+07:00`} />
-                      </td>
-                      <td className="tabular py-2.5 pr-3">{formatNumber(row.new_customers)}</td>
-                      <td className="tabular py-2.5 pr-3">
-                        {formatNumber(row.new_subscriptions)}
-                      </td>
-                      <td className="py-2.5">
-                        {Number(row.revenue) > 0 ? (
-                          <Money value={Number(row.revenue)} />
-                        ) : (
-                          <span className="text-muted-foreground">Belum ada</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <p className="text-muted-foreground text-[12px]">
-          Periode {period.from} sampai {period.to}, waktu Jakarta.
-        </p>
-      </section>
+      <ChartCard
+        judul="Langganan aktif per paket"
+        keterangan="Keadaan saat ini, bukan angka per periode. Nama paket ditampilkan seluruhnya supaya paket yang belum punya pelanggan tetap terlihat susunannya."
+      >
+        <BarKategori
+          data={perPaket}
+          tone="subscriptions"
+          satuan="langganan aktif"
+          pesanKosong={{
+            title: "Belum ada langganan aktif",
+            description:
+              "Paket tetap ditampilkan meski belum ada pelanggannya, supaya susunan paket yang tersedia terlihat. Pelanggan memilih paket dari aplikasi, bukan dari konsol ini.",
+          }}
+          labelAkses={`Jumlah langganan aktif per paket: ${perPaket
+            .map((paket) => `${paket.label} ${paket.value}`)
+            .join(", ")}.`}
+        />
+      </ChartCard>
     </>
   );
 }
 
-function FinanceTab({ period }: { period: Period }) {
+function FinanceTab({
+  period,
+  onPeriodChange,
+}: {
+  period: Period;
+  onPeriodChange: (next: Period) => void;
+}) {
   const query = useApiQuery<FinanceResponse>("/api/v1/admin/dashboard/finance", {
     from: period.from,
     to: period.to,
   });
+  const { setParams } = query;
+  const { from, to } = period;
 
-  if (query.status === "memuat") return <LoadingState label="Memuat angka keuangan" />;
+  /* Alasan yang sama seperti tab Bisnis: pilihan rentang harus diselaraskan dengan permintaan. */
+  useEffect(() => {
+    setParams({ from, to });
+  }, [from, to, setParams]);
 
-  if (query.status === "galat" || !query.data) {
-    return (
-      <ErrorState
-        title="Angka keuangan gagal dimuat"
-        description={query.error ?? "Server tidak mengirim keterangan galat."}
-        onRetry={query.reload}
+  return (
+    <>
+      <PeriodPicker
+        value={period}
+        onChange={onPeriodChange}
+        onReload={query.reload}
+        loading={query.status === "memuat"}
       />
-    );
-  }
 
-  const { revenue, receivables, refunds, payments } = query.data;
+      {query.status === "memuat" ? (
+        <LoadingState label="Memuat angka keuangan" />
+      ) : query.status === "galat" || !query.data ? (
+        <ErrorState
+          title="Angka keuangan gagal dimuat"
+          description={query.error ?? "Server tidak mengirim keterangan galat."}
+          onRetry={query.reload}
+        />
+      ) : (
+        <FinanceBody data={query.data} />
+      )}
+    </>
+  );
+}
+
+function FinanceBody({ data }: { data: FinanceResponse }) {
+  const { revenue, receivables, refunds, payments } = data;
   const outstanding = Number(receivables.open_amount) + Number(receivables.past_due_amount);
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Pendapatan periode ini"
@@ -387,9 +414,7 @@ function FinanceTab({ period }: { period: Period }) {
         />
         <StatCard
           label="Perubahan antar periode"
-          value={
-            revenue.change_percent === null ? null : `${revenue.change_percent}%`
-          }
+          value={revenue.change_percent === null ? null : `${revenue.change_percent}%`}
           /*
             Perubahan dari periode kosong tidak punya persentase yang bermakna. Ditampilkan
             sebagai belum dapat dihitung, bukan sebagai nol persen atau seratus persen, karena
@@ -400,6 +425,7 @@ function FinanceTab({ period }: { period: Period }) {
               ? "Belum dapat dihitung karena periode pembandingnya belum ada pendapatan"
               : "Dibandingkan periode dengan panjang yang sama tepat sebelumnya"
           }
+          tone={revenue.change_percent !== null && revenue.change_percent < 0 ? "warning" : "neutral"}
         />
         <StatCard
           label="Belum tertagih"
@@ -462,20 +488,27 @@ function FinanceTab({ period }: { period: Period }) {
             Piutang dihitung dari sisa tagihan, yaitu jumlah tagihan dikurangi yang sudah dibayar.
             Tagihan yang dibatalkan tidak lagi menuntut pembayaran.
           </p>
-          <Link href="/invoices" className="text-[13px] underline-offset-4 hover:underline">
-            Buka daftar tagihan
-          </Link>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            <Link href="/invoices" className="text-[13px] underline-offset-4 hover:underline">
+              Buka daftar tagihan
+            </Link>
+            <Link
+              href="/laporan/receivables"
+              className="text-[13px] underline-offset-4 hover:underline"
+            >
+              Rincian piutang
+            </Link>
+          </div>
         </section>
       </div>
 
-      <p className="text-muted-foreground text-[13px] leading-relaxed">
+      <p className="text-muted-foreground text-[12px] leading-relaxed">
         <span className="font-medium">Dasar perhitungan: </span>
-        Pendapatan diakui pada tanggal pembayaran diterima, dan nilainya jumlah tagihan tanpa
-        biaya layanan penyedia pembayaran. Refund diakui pada tanggal refund itu selesai, bukan
-        mundur ke periode tagihan asalnya. Karena dasar kas, laporan periode yang sudah lewat
-        tidak berubah angkanya.
+        pendapatan diakui pada tanggal pembayaran diterima, tanpa biaya layanan penyedia. Refund
+        diakui pada tanggal refund selesai, bukan mundur ke periode tagihan asalnya. Dasar
+        perhitungan lengkap tiap angka ada di halaman laporan.
       </p>
-    </div>
+    </>
   );
 }
 
@@ -503,7 +536,7 @@ function OperationsTab() {
   const jobBermasalah = jobs.filter((job) => job.is_stale || job.stuck_running);
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
       <p className="text-muted-foreground text-[13px] leading-relaxed">
         Tab ini selalu memantau keadaan sejak tengah malam waktu Jakarta, bukan rentang tanggal
         yang dipilih, karena tujuannya melihat apa yang sedang terjadi.
@@ -592,6 +625,11 @@ function OperationsTab() {
               </div>
             ) : null}
 
+            {/*
+              Daftar pekerjaan tetap berupa tabel meski halaman ini dipenuhi grafik. Isinya
+              keadaan alat, bukan angka per periode, dan yang dibaca dari sini adalah pekerjaan
+              mana yang perlu diperiksa. Tabel menjawabnya lebih cepat daripada grafik.
+            */}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[46rem] text-[13px]">
                 <caption className="sr-only">Keadaan pekerjaan terjadwal</caption>
@@ -697,11 +735,18 @@ function OperationsTab() {
       </div>
 
       <p className="text-muted-foreground text-[12px]">
-        Periode pengamatan {new Date(query.data.period.from).toLocaleDateString("id-ID", { dateStyle: "long", timeZone: "Asia/Jakarta" })}{" "}
-        sampai {new Date(query.data.period.to).toLocaleDateString("id-ID", { dateStyle: "long", timeZone: "Asia/Jakarta" })}, waktu Jakarta.
+        Periode pengamatan {formatTanggal(query.data.period.from)} sampai{" "}
+        {formatTanggal(query.data.period.to)}, waktu Jakarta.
       </p>
-    </div>
+    </>
   );
+}
+
+function formatTanggal(iso: string): string {
+  return new Date(iso).toLocaleDateString("id-ID", {
+    dateStyle: "long",
+    timeZone: "Asia/Jakarta",
+  });
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {

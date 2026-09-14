@@ -22,6 +22,11 @@ export const REPORT_LABELS: Record<string, { title: string; description: string 
     description:
       "Uang yang benar-benar diterima pada periode ini, dihitung pada tanggal pembayaran masuk.",
   },
+  growth: {
+    title: "Pertumbuhan",
+    description:
+      "Pelanggan baru dan langganan baru pada tiap periode, dipisah supaya keduanya bisa dibandingkan.",
+  },
   receivables: {
     title: "Piutang",
     description:
@@ -49,6 +54,7 @@ export const REPORT_LABELS: Record<string, { title: string; description: string 
 
 export type ReportType =
   | "revenue"
+  | "growth"
   | "receivables"
   | "subscriptions"
   | "devices"
@@ -57,6 +63,7 @@ export type ReportType =
 
 export const REPORT_TYPES: ReportType[] = [
   "revenue",
+  "growth",
   "receivables",
   "subscriptions",
   "devices",

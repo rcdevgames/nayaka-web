@@ -182,8 +182,9 @@ tanggal UTC dan pada pukul 07.00 WIB tanggalnya masih kemarin.
 **Laporan**
 
 - `/laporan` mengalihkan ke `/laporan/revenue`
-- `/laporan/[jenis]`: enam jenis laporan, yaitu `revenue`, `receivables`, `subscriptions`, `devices`,
-  `anomalies`, `refunds`. Pemilih periode tetap saat pindah jenis. Ada ekspor CSV
+- `/laporan/[jenis]`: tujuh jenis laporan, yaitu `revenue`, `growth`, `receivables`,
+  `subscriptions`, `devices`, `anomalies`, `refunds`. Pemilih periode tetap saat pindah jenis.
+  Ada ekspor CSV
 
 **Audit**
 
@@ -201,6 +202,19 @@ tanggal UTC dan pada pukul 07.00 WIB tanggalnya masih kemarin.
 **Rujukan**
 
 - `/design-system`: galeri seluruh komponen
+
+**Setiap tabel daftar punya kontrol halaman.** Kontrolnya seragam: rentang baris, tombol mundur
+dan maju, dan pemilih 20/50/100 baris per halaman. Tombol mundur dan maju tetap dirender tetapi
+dinonaktifkan saat tidak ada halaman tujuan, dan ringkasannya selalu tampil termasuk ketika
+hasilnya nol atau hanya satu halaman. Keduanya disengaja: kontrol yang muncul-hilang membuat
+tinggi halaman melompat setiap kali filter diganti. Ini berlaku di daftar pelanggan, perangkat,
+paket, langganan, tagihan, pembayaran, akun admin, peran (beserta katalog izinnya), empat tab
+audit, log provider, keterangan tabel tiap laporan, dan tabel sesi di halaman detail admin.
+
+**Tabel pekerjaan terjadwal di dashboard dikecualikan** karena himpunan tetap: isinya satu baris
+per pekerjaan terjadwal, bukan daftar yang bertambah seiring waktu. Tabel kesehatan di
+`/provider-logs` juga dikecualikan dan di sana satu tabel memang punya kontrol sendiri, yaitu
+daftar lognya; tabel kedua hanya satu baris per jenis operasi penyedia.
 
 ## 6. Keputusan yang belum diambil
 
@@ -230,6 +244,12 @@ perlu dibuka sendiri di peramban:
 **Halaman detail mengambil data di klien.** HTML dari server hanya memuat kerangka
 "Memuat ...", bukan isinya. Pemeriksaan HTTP 200 pada halaman-halaman itu tidak membuktikan
 apa pun tentang isinya.
+
+**Paginasi tabel sudah diuji di peramban sungguhan**, bukan dari kode status HTTP. Yang
+diperiksa: ringkasan baris tiap daftar, maju dan mundur halaman sampai batas akhir, penggantian
+ukuran halaman 20/50/100, dan filter yang tetap bekerja sesudah paginasi terpasang. Skripnya
+memakai CDP dan berada di luar repo, di `/tmp/nayaka-uji/`. Karena itu bagian di atas tetap
+berlaku untuk sisa halaman yang belum pernah disapu.
 
 ## 8. Catatan pengujian
 

@@ -9,13 +9,14 @@ import {
   EmptyState,
   FilterBar,
   PageHeader,
+  Pagination,
   StatCard,
   StatusLabel,
   statusTone,
   type FilterDefinition,
 } from "@/components/molecules";
 import { formatNumber } from "@/lib/format";
-import { tableStatus, useApiQuery } from "@/lib/use-api";
+import { tableStatus, usePagedQuery } from "@/lib/use-api";
 
 /*
   Daftar pelanggan.
@@ -67,7 +68,7 @@ function providerLabel(provider: string): string {
 }
 
 export function CustomerList() {
-  const query = useApiQuery<CustomersResponse>("/api/v1/admin/customers");
+  const query = usePagedQuery<CustomersResponse>("/api/v1/admin/customers");
 
   const filters: FilterDefinition[] = [
     {
@@ -243,6 +244,17 @@ export function CustomerList() {
             />
           )
         }
+      />
+
+      <Pagination
+        page={query.page}
+        limit={query.limit}
+        shown={rows.length}
+        unit="pelanggan"
+        hasMore={query.hasMore}
+        onPrev={query.prevPage}
+        onNext={query.nextPage}
+        onLimitChange={query.setLimit}
       />
     </div>
   );

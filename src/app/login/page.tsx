@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 import { LoginForm } from "@/components/molecules/login-form";
 
 /*
@@ -22,12 +24,17 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
     <>
       <section className="login-identity relative flex min-h-[164px] flex-col justify-between overflow-hidden px-5 py-5 text-white sm:min-h-[190px] sm:px-8 sm:py-7 lg:min-h-full lg:p-8 xl:p-12">
         <div className="relative z-10 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span aria-hidden className="login-mark grid size-9 place-items-center rounded-md text-base font-semibold lg:size-10 lg:text-lg">
-              N
-            </span>
+          <div className="flex flex-col gap-2">
+            <Image
+              src="/logos/nayaka-logo-white.png"
+              alt="Nayaka"
+              width={140}
+              height={42}
+              preload
+              className="h-7 w-auto self-start lg:h-8"
+            />
             <div>
-              <p className="text-sm font-semibold tracking-tight">Nayaka Admin</p>
+              <p className="text-sm font-semibold tracking-tight">PT Nayaka Pratama</p>
               <p className="text-xs text-white/70">Operasional CCTV rumah</p>
             </div>
           </div>
@@ -61,10 +68,16 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
       <section className="login-form-panel flex items-center justify-center px-5 py-9 sm:px-10 lg:px-12 xl:px-16">
         <div className="w-full max-w-sm">
           <div className="mb-8 flex flex-col gap-1.5">
-            <span aria-hidden className="login-mark-mobile mb-3 grid size-9 place-items-center rounded-md text-base font-semibold lg:hidden">
-              N
-            </span>
-            <p className="text-muted-foreground text-xs font-medium uppercase tracking-[0.16em]">Akses staf</p>
+            <Image
+              src="/logos/nayaka-logo-badge.png"
+              alt="Nayaka"
+              width={36}
+              height={36}
+              className="mb-3 size-9 rounded-md lg:hidden"
+            />
+            <p className="text-muted-foreground text-xs font-medium uppercase tracking-[0.16em]">
+              Akses staf · PT Nayaka Pratama
+            </p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">Masuk ke Nayaka Admin</h1>
             <p className="text-muted-foreground mt-1 text-[13px] leading-5">
               Gunakan akun internal yang diberikan oleh super admin.
