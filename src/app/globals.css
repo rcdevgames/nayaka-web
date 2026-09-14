@@ -224,12 +224,6 @@
   top: 18%;
 }
 
-.login-mark,
-.login-mark-mobile {
-  background: #ff7f50;
-  color: #073b4c;
-}
-
 .login-form-panel {
   background: var(--card);
 }
