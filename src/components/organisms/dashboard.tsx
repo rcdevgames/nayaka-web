@@ -715,7 +715,7 @@ function OperationsTab() {
             diawasi.
           </p>
           <Link href="/tindakan" className="text-[13px] underline-offset-4 hover:underline">
-            Buka antrian tindakan
+            Buka daftar perlu tindakan
           </Link>
         </section>
 

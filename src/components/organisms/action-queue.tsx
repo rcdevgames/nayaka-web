@@ -68,12 +68,12 @@ const SEVERITY_CLASSES: Record<string, string> = {
 export function ActionQueue() {
   const query = useApiQuery<Payload>("/api/v1/admin/action-queue");
 
-  if (query.status === "memuat") return <LoadingState label="Memuat antrian tindakan" />;
+  if (query.status === "memuat") return <LoadingState label="Memuat daftar tindakan" />;
 
   if (query.status === "galat" || !query.data) {
     return (
       <ErrorState
-        title="Antrian tindakan gagal dimuat"
+        title="Daftar tindakan gagal dimuat"
         description={query.error ?? "Server tidak mengirim keterangan galat."}
         onRetry={query.reload}
       />
@@ -86,11 +86,11 @@ export function ActionQueue() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Antrian tindakan"
-        description="Hal-hal yang menunggu keputusan manusia, terurut dari yang paling perlu ditangani lebih dulu."
+        title="Perlu tindakan"
+        description="Hal-hal yang menunggu keputusan manusia, terurut dari yang paling perlu ditangani lebih dulu. Setiap baris menyebut apa yang terjadi dan ke mana harus pergi untuk menanganinya."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
           label="Mendesak"
           value={formatNumber(mendesak)}
@@ -115,6 +115,18 @@ export function ActionQueue() {
           hint="Tagihan yang melewati tanggal jatuh tempo dan belum dibayar"
           tone={(counts.past_due_invoice ?? 0) > 0 ? "warning" : "neutral"}
         />
+        <StatCard
+          label="Percobaan klaim mencurigakan"
+          value={formatNumber(counts.claim_anomaly ?? 0)}
+          hint="Percobaan klaim perangkat yang berulang atau dari luar kebiasaan"
+          tone={(counts.claim_anomaly ?? 0) > 0 ? "danger" : "neutral"}
+        />
+        <StatCard
+          label="Langganan akan berakhir"
+          value={formatNumber(counts.expiring_subscription ?? 0)}
+          hint="Langganan yang masa berlakunya habis dalam waktu dekat"
+          tone={(counts.expiring_subscription ?? 0) > 0 ? "warning" : "neutral"}
+        />
       </div>
 
       {items.length === 0 ? (
@@ -122,8 +134,8 @@ export function ActionQueue() {
           <h2 className="text-base font-semibold">Tidak ada yang menunggu tindakan</h2>
           <p className="text-muted-foreground text-[13px] leading-relaxed">
             Tidak ada pembayaran yang menggantung, notifikasi mencurigakan, tagihan lewat jatuh
-            tempo, maupun percobaan klaim yang melewati batas. Keadaan ini berarti semua yang
-            perlu diputuskan sudah diputuskan.
+            tempo, klaim yang melewati batas, maupun langganan yang hampir berakhir. Keadaan ini
+            berarti semua yang perlu diputuskan sudah diputuskan.
           </p>
           <p className="text-muted-foreground text-[13px] leading-relaxed">
             Antrian ini diperiksa ulang setiap kali halaman dibuka, jadi tidak ada tombol muat
