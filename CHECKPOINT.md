@@ -13,8 +13,8 @@ Konsol admin Nayaka: Next.js 16 App Router, satu proyek berisi backend dan antar
 
 | Bagian | Jumlah | Keterangan |
 |---|---|---|
-| Halaman | 26 | Termasuk halaman masuk dan dua halaman diskon |
-| Endpoint API | 61 rute | Di bawah `/api/v1/admin` |
+| Halaman | 25 | Termasuk halaman masuk dan dua halaman diskon |
+| Endpoint API | 55 rute | 54 admin + health |
 | Tabel database | 35 | 9 migrasi terpasang di Supabase |
 | Komponen | 14 ui + 11 atom + 17 molekul + 26 organisme | Metode atom dan molekul |
 | Skema zod | 11 | Dipakai bersama klien dan server |
