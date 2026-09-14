@@ -1258,6 +1258,7 @@ Nilai `type` pada v1:
 | `type` | Isi |
 |---|---|
 | `revenue` | Pendapatan per periode, dari invoice lunas |
+| `growth` | Pelanggan baru dan langganan baru per periode |
 | `receivables` | Invoice belum dibayar dan yang lewat jatuh tempo |
 | `subscriptions` | Langganan per paket, upgrade, dan churn |
 | `devices` | Inventory, tingkat klaim, per model |
@@ -1270,7 +1271,11 @@ Seluruh tipe menerima parameter berikut:
 |---|---|---|
 | `from` | tanggal | Wajib |
 | `to` | tanggal | Wajib, maksimum 366 hari dari `from` |
-| `granularity` | `day`, `week`, `month` | Hanya untuk `revenue` dan `refunds` |
+| `granularity` | `day`, `week`, `month` | Hanya untuk `revenue`, `growth`, dan `refunds` |
+
+`growth` memakai deret yang sama dengan `dashboard/business`, sehingga angka pelanggan baru pada
+dashboard dan laporan selalu sama. Kolom `conversion_percent` bernilai `null` pada periode tanpa
+pelanggan baru, karena tidak ada yang bisa dibagi.
 
 Response berbentuk:
 
@@ -1302,8 +1307,8 @@ dihitung. Halaman laporan menampilkan kalimat ini di bawah judul, karena angka p
 tanpa keterangan dasar perhitungan mudah disalahartikan.
 
 `columns` menentukan urutan dan label kolom, sehingga halaman laporan tidak perlu mengetahui
-bentuk tiap jenis laporan. Tipe `receivables`, `devices`, dan `anomalies` hanya menerima
-`from` dan `to` tanpa `granularity`, dan barisnya berupa daftar objek, bukan agregat per
+bentuk tiap jenis laporan. Tipe `receivables`, `subscriptions`, `devices`, dan `anomalies` hanya
+menerima `from` dan `to` tanpa `granularity`, dan barisnya berupa daftar objek, bukan agregat per
 periode.
 
 Endpoint export mengembalikan berkas CSV dengan kolom yang sama seperti `columns`, ditambah
