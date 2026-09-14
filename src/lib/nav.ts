@@ -9,6 +9,7 @@ import {
   PlugsConnectedIcon,
   ReceiptIcon,
   ShieldCheckIcon,
+  TagIcon,
   TicketIcon,
   UsersIcon,
 } from "@phosphor-icons/react/dist/ssr";
@@ -97,6 +98,27 @@ export const navModules: NavModule[] = [
         status: "ready",
         permission: "subscription.read",
         hint: "Paket yang sedang berjalan per pelanggan, beserta masa berlakunya.",
+      },
+    ],
+  },
+  {
+    label: "Diskon",
+    entries: [
+      {
+        label: "Kode voucher",
+        href: "/diskon/voucher",
+        Icon: TicketIcon,
+        status: "ready",
+        permission: "discount.read",
+        hint: "Kode yang diketik pelanggan saat membayar, beserta masa berlaku, kuota, dan cakupan harganya.",
+      },
+      {
+        label: "Flash sale paket",
+        href: "/diskon/flash-sale",
+        Icon: TagIcon,
+        status: "ready",
+        permission: "discount.read",
+        hint: "Potongan berjendela waktu pada satu paket atau beberapa paket, tanpa kode yang perlu diketik pelanggan.",
       },
     ],
   },
