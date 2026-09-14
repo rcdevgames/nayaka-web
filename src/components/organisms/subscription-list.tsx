@@ -9,13 +9,14 @@ import {
   EmptyState,
   FilterBar,
   PageHeader,
+  Pagination,
   StatCard,
   StatusLabel,
   statusTone,
   type FilterDefinition,
 } from "@/components/molecules";
 import { formatNumber } from "@/lib/format";
-import { tableStatus, useApiQuery } from "@/lib/use-api";
+import { tableStatus, usePagedQuery } from "@/lib/use-api";
 
 /*
   Daftar langganan.
@@ -67,7 +68,7 @@ const INTERVALS: Record<string, string> = {
 };
 
 export function SubscriptionList() {
-  const query = useApiQuery<Response>("/api/v1/admin/subscriptions");
+  const query = usePagedQuery<Response>("/api/v1/admin/subscriptions");
 
   const filters: FilterDefinition[] = [
     {
@@ -256,6 +257,17 @@ export function SubscriptionList() {
             />
           )
         }
+      />
+
+      <Pagination
+        page={query.page}
+        limit={query.limit}
+        shown={rows.length}
+        unit="langganan"
+        hasMore={query.hasMore}
+        onPrev={query.prevPage}
+        onNext={query.nextPage}
+        onLimitChange={query.setLimit}
       />
     </div>
   );

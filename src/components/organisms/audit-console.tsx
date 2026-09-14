@@ -15,6 +15,7 @@ import {
   EmptyState,
   FilterBar,
   PageHeader,
+  Pagination,
   StatCard,
   StatusBadge,
   StatusLabel,
@@ -25,7 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { notifyError, notifySuccess } from "@/lib/alert";
 import { formatNumber } from "@/lib/format";
 import { toErrorMessage } from "@/lib/http";
-import { mutate, tableStatus, useApiQuery } from "@/lib/use-api";
+import { mutate, tableStatus, usePagedQuery } from "@/lib/use-api";
 import { useSessionStore } from "@/stores/session-store";
 
 /*
@@ -46,12 +47,6 @@ import { useSessionStore } from "@/stores/session-store";
   yang sama tidak dapat dipakai sebagai bukti.
 */
 
-/*
-  Satu halaman berisi 50 baris. Penelusuran audit biasanya mengikuti satu rangkaian kejadian,
-  dan 20 baris sering memotong rangkaian itu di tengah.
-*/
-const PAGE_LIMIT = 50;
-
 const PLAIN_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /*
@@ -65,7 +60,12 @@ const PLAIN_DATE = /^\d{4}-\d{2}-\d{2}$/;
 function toApiParams(
   values: Record<string, string | undefined>,
 ): Record<string, string | number | undefined> {
-  const params: Record<string, string | number | undefined> = { limit: PAGE_LIMIT };
+  /*
+    Ukuran halaman tidak ditulis di sini. Nilainya milik usePagedQuery, dan menyalinnya ke params
+    membuat pilihan "baris per halaman" diabaikan: server selalu menerima angka dari sini, sehingga
+    mengganti ukuran halaman tampak tidak berpengaruh.
+  */
+  const params: Record<string, string | number | undefined> = {};
 
   for (const [key, value] of Object.entries(values)) {
     if (!value) continue;
@@ -89,16 +89,31 @@ function hasFilter(values: Record<string, string | undefined>): boolean {
   Nilai filter disimpan apa adanya untuk kotak input, sementara versi yang sudah diterjemahkan
   dikirim ke server. Dua keadaan ini dipisah karena pemilih tanggal menampilkan tanggal polos,
   sedangkan endpoint meminta waktu lengkap.
+
+  `limit` tidak lagi ikut ditulis di sini karena ukuran halaman dikelola usePagedQuery, yang juga
+  menjaga agar mengganti ukuran halaman tidak menghapus filter yang sedang dipasang.
 */
 function useAuditQuery<T>(url: string) {
-  const query = useApiQuery<T>(url, { limit: PAGE_LIMIT });
-  const { setParams } = query;
   const [values, setValues] = useState<Record<string, string | undefined>>({});
+
+  const mapParams = useCallback(
+    (raw: Record<string, string | number | undefined>) =>
+      toApiParams(raw as Record<string, string | undefined>),
+    [],
+  );
+
+    /*
+    Ukuran halaman diserahkan ke usePagedQuery. Sebelumnya di sini ukuran halaman dipatok lebih dulu,
+    yang membuat pilihan "baris per halaman" tidak berpengaruh: nilainya sudah ditentukan lebih
+    dulu, dan tabel selalu menampilkan 50 baris seolah tidak ada halaman berikutnya.
+  */
+  const query = usePagedQuery<T>(url, { mapParams });
+  const { setParams } = query;
 
   const apply = useCallback(
     (next: Record<string, string | undefined>) => {
       setValues(next);
-      setParams(toApiParams(next));
+      setParams(next);
     },
     [setParams],
   );
@@ -553,6 +568,17 @@ function ChangeLogTab() {
           )
         }
       />
+
+      <Pagination
+        page={query.page}
+        limit={query.limit}
+        shown={rows.length}
+        unit="jejak perubahan"
+        hasMore={query.hasMore}
+        onPrev={query.prevPage}
+        onNext={query.nextPage}
+        onLimitChange={query.setLimit}
+      />
     </div>
   );
 }
@@ -793,6 +819,17 @@ function LoginAttemptsTab() {
           )
         }
       />
+
+      <Pagination
+        page={query.page}
+        limit={query.limit}
+        shown={rows.length}
+        unit="percobaan masuk"
+        hasMore={query.hasMore}
+        onPrev={query.prevPage}
+        onNext={query.nextPage}
+        onLimitChange={query.setLimit}
+      />
     </div>
   );
 }
@@ -997,6 +1034,17 @@ function SessionsTab() {
           )
         }
       />
+
+      <Pagination
+        page={query.page}
+        limit={query.limit}
+        shown={rows.length}
+        unit="sesi aktif"
+        hasMore={query.hasMore}
+        onPrev={query.prevPage}
+        onNext={query.nextPage}
+        onLimitChange={query.setLimit}
+      />
     </div>
   );
 }
@@ -1142,6 +1190,17 @@ function SessionEventsTab() {
             />
           )
         }
+      />
+
+      <Pagination
+        page={query.page}
+        limit={query.limit}
+        shown={rows.length}
+        unit="kejadian sesi"
+        hasMore={query.hasMore}
+        onPrev={query.prevPage}
+        onNext={query.nextPage}
+        onLimitChange={query.setLimit}
       />
     </div>
   );

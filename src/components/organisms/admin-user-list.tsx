@@ -13,6 +13,7 @@ import {
   EmptyState,
   FilterBar,
   PageHeader,
+  Pagination,
   StatCard,
   StatusLabel,
   statusTone,
@@ -32,7 +33,7 @@ import { notifyError, notifySuccess } from "@/lib/alert";
 import { toErrorMessage } from "@/lib/http";
 import { formatNumber } from "@/lib/format";
 import { PASSWORD_HINT, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "@/lib/password-rules";
-import { mutate, tableStatus, useApiQuery } from "@/lib/use-api";
+import { mutate, tableStatus, useApiQuery, usePagedQuery } from "@/lib/use-api";
 
 /*
   Daftar akun admin.
@@ -111,7 +112,7 @@ const formAkun = z.object({
 type FormAkunValues = z.infer<typeof formAkun>;
 
 export function AdminUserList() {
-  const query = useApiQuery<Response>("/api/v1/admin/admin-users");
+  const query = usePagedQuery<Response>("/api/v1/admin/admin-users");
   const [createOpen, setCreateOpen] = useState(false);
 
   const filters: FilterDefinition[] = [
@@ -281,6 +282,17 @@ export function AdminUserList() {
         }
       />
 
+      <Pagination
+        page={query.page}
+        limit={query.limit}
+        shown={rows.length}
+        unit="akun admin"
+        hasMore={query.hasMore}
+        onPrev={query.prevPage}
+        onNext={query.nextPage}
+        onLimitChange={query.setLimit}
+      />
+
       <p className="text-muted-foreground text-[13px] leading-relaxed">
         Izin diberikan lewat peran, tidak langsung ke akun. Untuk mengetahui apa yang sebenarnya
         boleh dilakukan seseorang, buka detail akunnya: di sana terlihat izin efektif gabungan
@@ -311,6 +323,10 @@ function CreateAdminDialog({
   /*
     Daftar peran dibaca saat dialog dibuka. Tanpa ini, admin harus tahu kode peran di luar
     kepala, dan salah ketik kode peran hanya akan ketahuan setelah formulir dikirim.
+  */
+  /*
+    Pilihan peran untuk formulir, bukan daftar bertabel: seluruh peran perlu tersedia sekaligus di
+    dalam dropdown, jadi tidak ada yang dipaginasi di sini.
   */
   const roles = useApiQuery<{ roles: RoleOption[] }>("/api/v1/admin/roles", { limit: "100" });
   const [selectedRole, setSelectedRole] = useState<string>("");

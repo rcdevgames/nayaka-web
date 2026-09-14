@@ -11,11 +11,12 @@ import {
   FilterBar,
   LoadingState,
   PageHeader,
+  Pagination,
   StatCard,
   type FilterDefinition,
 } from "@/components/molecules";
 import { formatNumber } from "@/lib/format";
-import { tableStatus, useApiQuery } from "@/lib/use-api";
+import { tableStatus, useApiQuery, useClientPage } from "@/lib/use-api";
 
 /*
   Log provider pembayaran.
@@ -146,6 +147,12 @@ export function ProviderLogList() {
   ];
 
   const rows = query.data?.logs ?? [];
+  /*
+    Server mematok 50 baris per arah, dan jumlah itu bisa berarti 100 baris di layar. Daftar
+    yang sudah lengkap di memori dipotong di sini supaya penelusuran tidak berubah menjadi
+    menggulir panjang.
+  */
+  const halaman = useClientPage(rows, 20);
   const meta = query.data?.meta;
   const health = query.data?.provider_health;
 
@@ -298,7 +305,7 @@ export function ProviderLogList() {
       <DataTable
         label="Log komunikasi dengan penyedia pembayaran"
         columns={columns}
-        rows={rows}
+        rows={halaman.rows}
         getRowId={(row) => row.id}
         status={tableStatus(query.status)}
         loadingLabel="Memuat log provider pembayaran"
@@ -325,6 +332,17 @@ export function ProviderLogList() {
             />
           )
         }
+      />
+
+      <Pagination
+        page={halaman.page}
+        limit={halaman.limit}
+        shown={halaman.rows.length}
+        unit="baris log"
+        hasMore={halaman.hasMore}
+        onPrev={halaman.prevPage}
+        onNext={halaman.nextPage}
+        onLimitChange={halaman.setLimit}
       />
 
       {meta ? (

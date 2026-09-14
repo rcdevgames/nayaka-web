@@ -13,6 +13,7 @@ import {
   EmptyState,
   FilterBar,
   PageHeader,
+  Pagination,
   TextAreaField,
   TextField,
   type FilterDefinition,
@@ -28,7 +29,7 @@ import {
 import { notifyError, notifySuccess } from "@/lib/alert";
 import { toErrorMessage } from "@/lib/http";
 import { formatNumber } from "@/lib/format";
-import { mutate, tableStatus, useApiQuery } from "@/lib/use-api";
+import { mutate, tableStatus, useClientPage, usePagedQuery } from "@/lib/use-api";
 
 /*
   Daftar peran dan izin.
@@ -82,7 +83,7 @@ const formPeran = z.object({
 type FormPeranValues = z.infer<typeof formPeran>;
 
 export function RoleList() {
-  const query = useApiQuery<Response>("/api/v1/admin/roles");
+  const query = usePagedQuery<Response>("/api/v1/admin/roles");
   const [createOpen, setCreateOpen] = useState(false);
 
   const filters: FilterDefinition[] = [
@@ -91,6 +92,11 @@ export function RoleList() {
 
   const roles = query.data?.roles ?? [];
   const permissions = query.data?.permissions ?? [];
+  /*
+    Daftar izin adalah katalog tertutup yang ikut terkirim bersama daftar peran, jadi
+    pemotongan barisnya dilakukan di klien: tidak ada permintaan tambahan yang dibutuhkan.
+  */
+  const halamanIzin = useClientPage(permissions, 20);
 
   const columns: Column<Role>[] = [
     {
@@ -186,6 +192,17 @@ export function RoleList() {
         }
       />
 
+      <Pagination
+        page={query.page}
+        limit={query.limit}
+        shown={roles.length}
+        unit="peran"
+        hasMore={query.hasMore}
+        onPrev={query.prevPage}
+        onNext={query.nextPage}
+        onLimitChange={query.setLimit}
+      />
+
       <section className="bg-card flex flex-col gap-3 rounded-xl border border-border p-4">
         <div className="flex flex-col gap-1">
           <h2 className="text-base font-semibold">Daftar izin</h2>
@@ -212,7 +229,7 @@ export function RoleList() {
                 </tr>
               </thead>
               <tbody>
-                {permissions.map((permission) => (
+                {halamanIzin.rows.map((permission) => (
                   <tr key={permission.code} className="border-b border-border last:border-0">
                     <td className="tabular py-2.5 pr-3 font-medium">{permission.code}</td>
                     <td className="py-2.5 pr-3">{permission.name}</td>
@@ -229,6 +246,17 @@ export function RoleList() {
             </table>
           </div>
         )}
+
+        <Pagination
+          page={halamanIzin.page}
+          limit={halamanIzin.limit}
+          shown={halamanIzin.rows.length}
+          unit="izin"
+          hasMore={halamanIzin.hasMore}
+          onPrev={halamanIzin.prevPage}
+          onNext={halamanIzin.nextPage}
+          onLimitChange={halamanIzin.setLimit}
+        />
       </section>
 
       <CreateRoleDialog

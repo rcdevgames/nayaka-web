@@ -9,6 +9,7 @@ export { OncePanel } from "./once-panel";
 export { PeriodPicker, jakartaToday, periodShortcuts, type Period } from "./period-picker";
 export { NavItem, type NavEntry } from "./nav-item";
 export { PageHeader } from "./page-header";
+export { Pagination } from "./pagination";
 export { ProfileMenu } from "./profile-menu";
 export { StatCard } from "./stat-card";
 export { StatusBadge } from "./status-badge";

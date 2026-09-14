@@ -4,8 +4,8 @@ import { ArrowLeftIcon } from "@phosphor-icons/react";
 import Link from "next/link";
 
 import { Button, Timestamp } from "@/components/atoms";
-import { ErrorState, LoadingState, PageHeader, StatusLabel } from "@/components/molecules";
-import { useApiQuery } from "@/lib/use-api";
+import { ErrorState, LoadingState, PageHeader, Pagination, StatusLabel } from "@/components/molecules";
+import { useApiQuery, useClientPage } from "@/lib/use-api";
 
 /*
   Detail akun admin.
@@ -57,6 +57,16 @@ type Detail = {
 */
 export function AdminUserDetail({ adminUserId }: { adminUserId: string }) {
   const query = useApiQuery<Detail>(`/api/v1/admin/admin-users/${adminUserId}`);
+
+  /*
+    Hook paginasi harus dipanggil sebelum cabang muat/gagal di bawah, karena cabang itu
+    berhenti lebih awal dan jumlah hook per render tidak boleh berubah. Sebelum datanya tiba,
+    daftarnya masih kosong dan tidak ada yang ditampilkan.
+
+    Server sendiri membatasi riwayat sesi pada 50 baris terakhir, jadi seluruh barisnya sudah
+    ada di muatan ini; memotongnya di klien lebih murah daripada meminta ulang ke server.
+  */
+  const halamanSesi = useClientPage(query.data?.sessions ?? [], 20);
 
   if (query.status === "memuat") return <LoadingState label="Memuat data akun admin" />;
 
@@ -174,45 +184,58 @@ export function AdminUserDetail({ adminUserId }: { adminUserId: string }) {
             Belum pernah ada sesi untuk akun ini. Akun yang baru dibuat memang belum pernah masuk.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] text-[13px]">
-              <caption className="sr-only">Riwayat sesi akun admin ini</caption>
-              <thead>
-                <tr className="text-muted-foreground border-b border-border text-left">
-                  <th scope="col" className="py-2 pr-3 font-medium">Dibuat</th>
-                  <th scope="col" className="py-2 pr-3 font-medium">Terakhir dipakai</th>
-                  <th scope="col" className="py-2 pr-3 font-medium">Alamat IP</th>
-                  <th scope="col" className="py-2 font-medium">Keadaan</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.map((session) => (
-                  <tr key={session.id} className="border-b border-border last:border-0">
-                    <td className="py-2.5 pr-3">
-                      <Timestamp value={session.created_at} />
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <Timestamp value={session.last_used_at} fallback="Belum pernah" />
-                    </td>
-                    <td className="tabular py-2.5 pr-3">
-                      {session.ip_address ?? "Tidak tercatat"}
-                    </td>
-                    <td className="py-2.5">
-                      {session.revoked_at ? (
-                        <span className="text-muted-foreground">
-                          Dihentikan <Timestamp value={session.revoked_at} />
-                        </span>
-                      ) : new Date(session.expires_at) > new Date() ? (
-                        <span className="text-success">Aktif</span>
-                      ) : (
-                        <span className="text-muted-foreground">Kedaluwarsa</span>
-                      )}
-                    </td>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[40rem] text-[13px]">
+                <caption className="sr-only">Riwayat sesi akun admin ini</caption>
+                <thead>
+                  <tr className="text-muted-foreground border-b border-border text-left">
+                    <th scope="col" className="py-2 pr-3 font-medium">Dibuat</th>
+                    <th scope="col" className="py-2 pr-3 font-medium">Terakhir dipakai</th>
+                    <th scope="col" className="py-2 pr-3 font-medium">Alamat IP</th>
+                    <th scope="col" className="py-2 font-medium">Keadaan</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {halamanSesi.rows.map((session) => (
+                    <tr key={session.id} className="border-b border-border last:border-0">
+                      <td className="py-2.5 pr-3">
+                        <Timestamp value={session.created_at} />
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <Timestamp value={session.last_used_at} fallback="Belum pernah" />
+                      </td>
+                      <td className="tabular py-2.5 pr-3">
+                        {session.ip_address ?? "Tidak tercatat"}
+                      </td>
+                      <td className="py-2.5">
+                        {session.revoked_at ? (
+                          <span className="text-muted-foreground">
+                            Dihentikan <Timestamp value={session.revoked_at} />
+                          </span>
+                        ) : new Date(session.expires_at) > new Date() ? (
+                          <span className="text-success">Aktif</span>
+                        ) : (
+                          <span className="text-muted-foreground">Kedaluwarsa</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <Pagination
+              page={halamanSesi.page}
+              limit={halamanSesi.limit}
+              shown={halamanSesi.rows.length}
+              unit="sesi"
+              hasMore={halamanSesi.hasMore}
+              onPrev={halamanSesi.prevPage}
+              onNext={halamanSesi.nextPage}
+              onLimitChange={halamanSesi.setLimit}
+            />
+          </>
         )}
       </section>
 
