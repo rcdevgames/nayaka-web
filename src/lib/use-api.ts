@@ -207,7 +207,10 @@ export function useApiQuery<T>(
   const reload = useCallback(() => setReloadToken((value) => value + 1), []);
 
   const setParams = useCallback(
-    (next: Record<string, string | number | undefined>) => setParamsState(next),
+    (next: Record<string, string | number | undefined>) =>
+      setParamsState((current) =>
+        buildUrl("", current) === buildUrl("", next) ? current : next,
+      ),
     [],
   );
 
