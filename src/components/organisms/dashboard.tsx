@@ -147,13 +147,13 @@ export function Dashboard() {
         </TabsList>
 
         <TabsContent value="bisnis" className="flex flex-col gap-6 pt-4">
-          <BusinessTab period={period} onPeriodChange={setPeriod} />
+          {tab === "bisnis" ? <BusinessTab period={period} onPeriodChange={setPeriod} /> : null}
         </TabsContent>
         <TabsContent value="keuangan" className="flex flex-col gap-6 pt-4">
-          <FinanceTab period={period} onPeriodChange={setPeriod} />
+          {tab === "keuangan" ? <FinanceTab period={period} onPeriodChange={setPeriod} /> : null}
         </TabsContent>
         <TabsContent value="operasional" className="flex flex-col gap-6 pt-4">
-          <OperationsTab />
+          {tab === "operasional" ? <OperationsTab /> : null}
         </TabsContent>
       </Tabs>
     </div>
