@@ -5,6 +5,7 @@ export { AdminUserList } from "./admin-user-list";
 export { CustomerDetail } from "./customer-detail";
 export { CustomerList } from "./customer-list";
 export { DeviceCreateForm } from "./device-create-form";
+export { EmergencyContactList } from "./emergency-contact-list";
 export { DeviceDetail } from "./device-detail";
 export { Dashboard } from "./dashboard";
 export { DeviceList } from "./device-list";

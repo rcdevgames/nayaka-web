@@ -60,6 +60,14 @@ export function jwtAdminAccessSecret(): string {
   );
 }
 
+/* Kunci HMAC terpisah untuk access token aplikasi mobile customer. */
+export function jwtCustomerAccessSecret(): string {
+  return required(
+    "JWT_CUSTOMER_ACCESS_SECRET",
+    "Isi dengan string acak panjang yang berbeda dari JWT admin.",
+  );
+}
+
 export function csrfSecret(): string {
   return required(
     "CSRF_SECRET",

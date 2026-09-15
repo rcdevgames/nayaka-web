@@ -438,7 +438,7 @@ async function main(): Promise<void> {
       `SELECT count(*)::int AS n FROM information_schema.tables
        WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name <> 'schema_migrations'`,
     );
-    hasil(`35 tabel domain (dapat ${tabel.rows[0].n})`, tabel.rows[0].n === 35);
+    hasil(`44 tabel domain (dapat ${tabel.rows[0].n})`, tabel.rows[0].n === 44);
 
     await c.query("BEGIN");
     await ujiBatasan(c);

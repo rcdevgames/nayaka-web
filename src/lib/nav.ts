@@ -6,6 +6,7 @@ import {
   FileTextIcon,
   GaugeIcon,
   KeyIcon,
+  PhoneCallIcon,
   PlugsConnectedIcon,
   ReceiptIcon,
   ShieldCheckIcon,
@@ -169,6 +170,19 @@ export const navModules: NavModule[] = [
         status: "ready",
         permission: "audit.read",
         hint: "Riwayat tindakan admin dan sistem: siapa mengubah apa, kapan, dan dari mana.",
+      },
+    ],
+  },
+  {
+    label: "Operasional",
+    entries: [
+      {
+        label: "Nomor emergency",
+        href: "/emergency-contacts",
+        Icon: PhoneCallIcon,
+        status: "ready",
+        permission: "emergency_contact.read",
+        hint: "Nomor bantuan yang dipilih customer dari tombol Emergency Call.",
       },
     ],
   },

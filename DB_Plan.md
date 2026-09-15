@@ -42,43 +42,44 @@ Connection string database hanya boleh digunakan server. Jangan menaruhnya di br
 11. `customer_auth_accounts`
 12. `customer_sessions`
 13. `auth_verification_codes`
+14. `emergency_contacts`
 
 ### Perangkat CCTV
 
-14. `devices`
-15. `device_claim_codes`
-16. `device_claim_attempts`
-17. `device_credentials` (fase 2, belum dipakai)
-18. `device_events` (fase 2, belum dipakai)
+15. `devices`
+16. `device_claim_codes`
+17. `device_claim_attempts`
+18. `device_credentials` (fase 2, belum dipakai)
+19. `device_events` (fase 2, belum dipakai)
 
 ### Subscription
 
-19. `subscription_plans`
-20. `plan_prices`
-21. `subscriptions`
-22. `subscription_events`
+20. `subscription_plans`
+21. `plan_prices`
+22. `subscriptions`
+23. `subscription_events`
 
 ### Billing dan pembayaran
 
-23. `invoices`
-24. `invoice_items`
-25. `payment_attempts`
-26. `payment_webhook_events`
-27. `payment_provider_calls`
-28. `payment_refunds`
+24. `invoices`
+25. `invoice_items`
+26. `payment_attempts`
+27. `payment_webhook_events`
+28. `payment_provider_calls`
+29. `payment_refunds`
 
 ### Diskon
 
-29. `discount_vouchers`
-30. `discount_voucher_prices`
-31. `discount_voucher_redemptions`
-32. `plan_flash_sales`
-33. `plan_flash_sale_prices`
+30. `discount_vouchers`
+31. `discount_voucher_prices`
+32. `discount_voucher_redemptions`
+33. `plan_flash_sales`
+34. `plan_flash_sale_prices`
 
 ### Infrastruktur API
 
-34. `idempotency_keys`
-35. `scheduled_job_runs`
+35. `idempotency_keys`
+36. `scheduled_job_runs`
 
 Tabel nomor 17 dan 18 dibuat pada migration tetapi sengaja tidak dipakai selama integrasi CCTV belum dikerjakan. Tabel 29 sampai 33 ditambahkan pada migration `0008_discount_module.sql`; batas invoice pada `0009_invoice_discount_limit.sql`. Lihat bagian modul diskon.
 
