@@ -166,6 +166,175 @@ async function ujiBatasan(c: Client): Promise<void> {
   await harusDitolak(c, "webhook dengan kunci sama ditolak",
     `INSERT INTO payment_webhook_events (provider_event_id, event_type, payload) VALUES ('INV-4-1:completed','payment.completed','{}'::jsonb)`);
 
+  console.log("\n-- voucher dan flash sale --");
+  /*
+    Modul diskon diuji pada paket yang dibuat khusus di sini, bukan pada paket `free` yang sudah ada.
+
+    Alasannya: paket `free` sudah punya harga bulanan, sedangkan satu paket hanya boleh punya satu
+    harga per interval. Uji ini butuh dua harga pada paket yang sama untuk membedakan cakupan
+    `all_prices` dari `selected_prices`, dan menumpangkan harga kedua ke paket `free` akan mengubah
+    data paket yang sungguhan dipakai.
+
+    Paket kedua ada untuk membuktikan pembatasan jendela flash sale berlaku per paket, bukan global.
+  */
+  const planUjiId = (
+    await c.query<{ id: string }>(
+      `INSERT INTO subscription_plans (code, name, device_limit, is_free, is_active, sort_order)
+       VALUES ('uji-diskon-a', 'Paket Uji Diskon A', 1, false, true, 900) RETURNING id`,
+    )
+  ).rows[0].id;
+  const planUjiLainId = (
+    await c.query<{ id: string }>(
+      `INSERT INTO subscription_plans (code, name, device_limit, is_free, is_active, sort_order)
+       VALUES ('uji-diskon-b', 'Paket Uji Diskon B', 1, false, true, 901) RETURNING id`,
+    )
+  ).rows[0].id;
+
+  const priceBulananId = (
+    await c.query<{ id: string }>(
+      `INSERT INTO plan_prices (plan_id, billing_interval, amount)
+       VALUES ($1, 'monthly', 100000) RETURNING id`,
+      [planUjiId],
+    )
+  ).rows[0].id;
+  const priceTahunanId = (
+    await c.query<{ id: string }>(
+      `INSERT INTO plan_prices (plan_id, billing_interval, amount)
+       VALUES ($1, 'yearly', 1000000) RETURNING id`,
+      [planUjiId],
+    )
+  ).rows[0].id;
+
+  await harusDiterima(c, "voucher persen diterima",
+    `INSERT INTO discount_vouchers (code, name, discount_type, percent_value, scope)
+     VALUES ('HEMAT20', 'Hemat 20 persen', 'percent', 20, 'all_prices')`);
+  await harusDitolak(c, "voucher persen di atas 100 ditolak",
+    `INSERT INTO discount_vouchers (code, name, discount_type, percent_value, scope)
+     VALUES ('LEBIH', 'Terlalu besar', 'percent', 150, 'all_prices')`);
+  await harusDiterima(c, "voucher nominal tetap diterima",
+    `INSERT INTO discount_vouchers (code, name, discount_type, fixed_amount, scope)
+     VALUES ('POTONG50', 'Potong lima puluh ribu', 'fixed', 50000, 'selected_prices')`);
+  /*
+    Dua bentuk nilai tidak boleh terisi bersamaan. Kalau boleh, tidak ada cara mengetahui mana yang
+    dimaksud saat menghitung, dan potongan yang dipakai bergantung pada urutan pemeriksaan di kode.
+  */
+  await harusDitolak(c, "voucher dengan dua nilai ditolak",
+    `INSERT INTO discount_vouchers (code, name, discount_type, percent_value, fixed_amount, scope)
+     VALUES ('DUA', 'Dua nilai', 'percent', 10, 5000, 'all_prices')`);
+  await harusDitolak(c, "voucher tanpa nilai ditolak",
+    `INSERT INTO discount_vouchers (code, name, discount_type, scope)
+     VALUES ('KOSONG', 'Tanpa nilai', 'percent', 'all_prices')`);
+  await harusDitolak(c, "jenis potongan asing ditolak",
+    `INSERT INTO discount_vouchers (code, name, discount_type, fixed_amount, scope)
+     VALUES ('ANEH', 'Jenis asing', 'gratis', 5000, 'all_prices')`);
+  await harusDitolak(c, "kode voucher huruf kecil ditolak",
+    `INSERT INTO discount_vouchers (code, name, discount_type, fixed_amount, scope)
+     VALUES ('hemat30', 'Huruf kecil', 'fixed', 5000, 'all_prices')`);
+  await harusDitolak(c, "kode voucher duplikat ditolak",
+    `INSERT INTO discount_vouchers (code, name, discount_type, percent_value, scope)
+     VALUES ('HEMAT20', 'Kembar', 'percent', 25, 'all_prices')`);
+  await harusDitolak(c, "jendela voucher terbalik ditolak",
+    `INSERT INTO discount_vouchers (code, name, discount_type, percent_value, scope, starts_at, ends_at)
+     VALUES ('TERBALIK', 'Terbalik', 'percent', 10, 'all_prices', now(), now() - interval '1 day')`);
+
+  /*
+    Daftar harga terpilih hanya boleh ada untuk voucher bercakupan `selected_prices`. Baris sisa
+    untuk voucher `all_prices` membuat cakupannya tidak lagi dapat disimpulkan dari data.
+  */
+  const voucherId = (
+    await c.query<{ id: string }>("SELECT id FROM discount_vouchers WHERE code = 'POTONG50'")
+  ).rows[0].id;
+  const allPricesVoucherId = (
+    await c.query<{ id: string }>("SELECT id FROM discount_vouchers WHERE code = 'HEMAT20'")
+  ).rows[0].id;
+  await harusDiterima(c, "harga terpilih untuk voucher selected_prices diterima",
+    `INSERT INTO discount_voucher_prices (voucher_id, plan_price_id) VALUES ($1,$2)`,
+    [voucherId, priceBulananId]);
+  await harusDitolak(c, "harga terpilih untuk voucher all_prices ditolak",
+    `INSERT INTO discount_voucher_prices (voucher_id, plan_price_id) VALUES ($1,$2)`,
+    [allPricesVoucherId, priceBulananId]);
+  /*
+    Satu harga boleh dipakai beberapa voucher, tetapi tidak boleh dua kali oleh voucher yang sama.
+    Baris kembar tidak mengubah arti apa pun, dan justru membuat jumlah harga terpilih pada layar
+    terlihat berbeda dari yang sebenarnya.
+  */
+  await harusDitolak(c, "harga terpilih kembar pada voucher yang sama ditolak",
+    `INSERT INTO discount_voucher_prices (voucher_id, plan_price_id) VALUES ($1,$2)`,
+    [voucherId, priceBulananId]);
+
+  /*
+    Voucher bercakupan `selected_prices` yang didaftarkan hanya pada harga bulanan tidak boleh
+    mengenai harga tahunan. Inilah bedanya cakupan terpilih dari `all_prices`, dan pemeriksaan ini
+    yang membuktikannya.
+  */
+  const sasaranTahunan = await c.query<{ n: number }>(
+    `SELECT count(*)::int AS n
+     FROM discount_voucher_prices vp
+     JOIN plan_prices p ON p.id = vp.plan_price_id
+     WHERE vp.voucher_id = $1 AND vp.plan_price_id = $2`,
+    [voucherId, priceTahunanId],
+  );
+  hasil("voucher selected_prices tidak mengenai harga tahunan", sasaranTahunan.rows[0].n === 0);
+
+  await harusDiterima(c, "penukaran voucher pertama diterima",
+    `INSERT INTO discount_voucher_redemptions
+       (voucher_id, customer_id, code, amount_before, discount_amount, amount_after)
+     VALUES ($1,$2,'POTONG50',100000,50000,50000)`, [voucherId, customerId]);
+  await harusDitolak(c, "penukaran kedua oleh pelanggan yang sama ditolak",
+    `INSERT INTO discount_voucher_redemptions
+       (voucher_id, customer_id, code, amount_before, discount_amount, amount_after)
+     VALUES ($1,$2,'POTONG50',100000,50000,50000)`, [voucherId, customerId]);
+  /*
+    Selisih yang tidak cocok berarti potongan yang dicatat bukan potongan yang diberikan. Angka itu
+    yang dipakai laporan, jadi ketidakcocokannya harus ditolak database, bukan dibiarkan lewat.
+  */
+  await harusDitolak(c, "penukaran dengan selisih tidak cocok ditolak",
+    `INSERT INTO discount_voucher_redemptions
+       (voucher_id, code, amount_before, discount_amount, amount_after)
+     VALUES ($1,'BEDA',100000,50000,60000)`, [voucherId]);
+  await harusDitolak(c, "penukaran dengan potongan negatif ditolak",
+    `INSERT INTO discount_voucher_redemptions
+       (voucher_id, code, amount_before, discount_amount, amount_after)
+     VALUES ($1,'NEGATIF',100000,-5000,105000)`, [voucherId]);
+
+  /*
+    Pemeriksaan yang paling penting di modul ini: potongan tidak boleh melebihi harga. Tanpa batas
+    ini, satu voucher bernilai besar dapat menghasilkan tagihan bernilai negatif.
+  */
+  await harusDitolak(c, "potongan melebihi harga ditolak",
+    `INSERT INTO invoices (customer_id, invoice_number, status, subtotal, discount_amount, total_amount)
+     VALUES ($1,'INV-D1','open',100000,150000,-50000)`, [customerId]);
+  await harusDiterima(c, "potongan sama dengan harga diterima",
+    `INSERT INTO invoices (customer_id, invoice_number, status, subtotal, discount_amount, total_amount)
+     VALUES ($1,'INV-D2','open',100000,100000,0)`, [customerId]);
+
+  await harusDiterima(c, "flash sale paket diterima",
+    `INSERT INTO plan_flash_sales (plan_id, name, discount_type, percent_value, scope, starts_at, ends_at)
+     VALUES ($1,'Flash sale uji','percent',30,'all_prices', now(), now() + interval '1 day')`, [planUjiId]);
+  /*
+    Dua jendela yang bertabrakan pada paket yang sama membuat harga akhir bergantung pada urutan
+    pembacaan baris. Karena itu tabrakan ditolak, bukan diselesaikan diam-diam.
+  */
+  await harusDitolak(c, "jendela flash sale bertabrakan pada paket sama ditolak",
+    `INSERT INTO plan_flash_sales (plan_id, name, discount_type, percent_value, scope, starts_at, ends_at)
+     VALUES ($1,'Bertabrakan','percent',10,'all_prices', now() + interval '1 hour', now() + interval '2 day')`, [planUjiId]);
+  await harusDiterima(c, "jendela flash sale setelah yang lama ditutup diterima",
+    `INSERT INTO plan_flash_sales (plan_id, name, discount_type, percent_value, scope, starts_at, ends_at)
+     VALUES ($1,'Setelahnya','percent',10,'all_prices', now() + interval '2 day', now() + interval '3 day')`, [planUjiId]);
+  await harusDitolak(c, "jendela flash sale terbalik ditolak",
+    `INSERT INTO plan_flash_sales (plan_id, name, discount_type, percent_value, scope, starts_at, ends_at)
+     VALUES ($1,'Terbalik','percent',10,'all_prices', now() + interval '1 day', now())`, [planUjiId]);
+  await harusDiterima(c, "jendela flash sale pada paket lain diterima",
+    `INSERT INTO plan_flash_sales (plan_id, name, discount_type, percent_value, scope, starts_at, ends_at)
+     VALUES ($1,'Paket lain','percent',10,'all_prices', now(), now() + interval '1 day')`, [planUjiLainId]);
+  /*
+    Flash sale yang dinonaktifkan tidak boleh menghalangi jendela baru pada paket yang sama. Tanpa
+    pengecualian ini, promo yang sudah dibatalkan akan terus memblokir jadwal berikutnya.
+  */
+  await harusDiterima(c, "flash sale nonaktif dalam jendela sama diterima",
+    `INSERT INTO plan_flash_sales (plan_id, name, discount_type, percent_value, scope, starts_at, ends_at, is_active)
+     VALUES ($1,'Sudah dibatalkan','percent',20,'all_prices', now(), now() + interval '1 day', false)`, [planUjiId]);
+
   console.log("\n-- panggilan ke provider --");
   await harusDitolak(c, "durasi negatif ditolak",
     `INSERT INTO payment_provider_calls (operation, duration_ms, outcome) VALUES ('transactiondetail', -1, 'success')`);
@@ -269,7 +438,7 @@ async function main(): Promise<void> {
       `SELECT count(*)::int AS n FROM information_schema.tables
        WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name <> 'schema_migrations'`,
     );
-    hasil(`30 tabel domain (dapat ${tabel.rows[0].n})`, tabel.rows[0].n === 30);
+    hasil(`44 tabel domain (dapat ${tabel.rows[0].n})`, tabel.rows[0].n === 44);
 
     await c.query("BEGIN");
     await ujiBatasan(c);

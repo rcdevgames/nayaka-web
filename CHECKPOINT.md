@@ -3,7 +3,7 @@
 Catatan keadaan proyek Nayaka. Tujuannya supaya pekerjaan bisa dilanjutkan tanpa membaca ulang
 seluruh riwayat percakapan, dan supaya keputusan yang belum selesai tidak hilang.
 
-Terakhir diperbarui: 13 September 2026. Konsol berjalan di pm2 sebagai proses `nayaka`, port 3101.
+Terakhir diperbarui: 14 September 2026. Konsol berjalan di pm2 sebagai proses `nayaka`, port 3101.
 
 ---
 
@@ -13,11 +13,11 @@ Konsol admin Nayaka: Next.js 16 App Router, satu proyek berisi backend dan antar
 
 | Bagian | Jumlah | Keterangan |
 |---|---|---|
-| Halaman | 24 | Termasuk halaman masuk dan galeri komponen |
-| Endpoint API | 49 rute | Di bawah `/api/v1/admin` |
-| Tabel database | 31 | 7 migrasi terpasang di Supabase |
-| Komponen | 14 ui + 11 atom + 17 molekul + 23 organisme | Metode atom dan molekul |
-| Skema zod | 10 | Dipakai bersama klien dan server |
+| Halaman | 25 | Termasuk halaman masuk dan dua halaman diskon |
+| Endpoint API | 55 rute | 54 admin + health |
+| Tabel database | 35 | 9 migrasi terpasang di Supabase |
+| Komponen | 14 ui + 11 atom + 17 molekul + 26 organisme | Metode atom dan molekul |
+| Skema zod | 11 | Dipakai bersama klien dan server |
 
 Perintah:
 
@@ -199,10 +199,6 @@ tanggal UTC dan pada pukul 07.00 WIB tanggalnya masih kemarin.
 - `/roles` dan `/roles/[id]`: daftar peran, katalog 20 izin, kotak centang izin per modul,
   panel pemegang, simpan dengan alasan
 
-**Rujukan**
-
-- `/design-system`: galeri seluruh komponen
-
 **Setiap tabel daftar punya kontrol halaman.** Kontrolnya seragam: rentang baris, tombol mundur
 dan maju, dan pemilih 20/50/100 baris per halaman. Tombol mundur dan maju tetap dirender tetapi
 dinonaktifkan saat tidak ada halaman tujuan, dan ringkasannya selalu tampil termasuk ketika
@@ -232,14 +228,19 @@ daftar lognya; tabel kedua hanya satu baris per jenis operasi penyedia.
 
 ## 7. Yang belum pernah diuji
 
-**Tidak ada otomasi peramban di proyek ini.** Yang diperiksa hanya kode status HTTP dan
-tidak adanya penanda galat di HTML. Artinya hal-hal berikut belum pernah diverifikasi dan
-perlu dibuka sendiri di peramban:
+**Uji browser modul diskon belum menghasilkan click-through valid.** Route halaman mengembalikan `307`
+ketika sesi tidak tersedia. Smoke test endpoint tanpa cookie menghasilkan `401`, sesuai guard. Login
+uji dengan kredensial sementara menghasilkan `401 INVALID_CREDENTIALS`, sehingga endpoint dengan sesi
+admin nyata belum terbukti.
+
+Bagian berikut tetap belum diverifikasi dan perlu dibuka sendiri di peramban:
 
 - Klik, perpindahan tab, dan pengiriman formulir
 - Tampilan visual, tata letak, dan ganti tema
 - Hidrasi dan `SessionBootstrap`
 - Fokus papan ketik dan pembacaan layar
+
+**Catatan historis:** daftar di bawah berlaku untuk halaman lama sebelum modul diskon ditambahkan.
 
 **Halaman detail mengambil data di klien.** HTML dari server hanya memuat kerangka
 "Memuat ...", bukan isinya. Pemeriksaan HTTP 200 pada halaman-halaman itu tidak membuktikan
@@ -274,7 +275,7 @@ maupun peran.
 | `DESIGN.md` | Arah desain yang mengikat untuk urusan tampilan |
 | `src/lib/password-rules.ts` | Satu-satunya tempat aturan kata sandi |
 | `src/lib/report-labels.ts` | Jenis laporan, dipakai klien dan server |
-| `src/lib/nav.ts` | Daftar menu sidebar beserta izin yang dibutuhkan |
+| `src/lib/nav.ts` | Daftar modul dan menu sidebar beserta izin serta keterangannya |
 | `src/lib/server/guard.ts` | Pemeriksaan sesi dan izin |
 | `src/lib/server/errors.ts` | Daftar kode galat dan status HTTP-nya |
 | `db/migrations/` | 7 migrasi yang sudah terpasang |

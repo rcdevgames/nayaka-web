@@ -42,37 +42,46 @@ Connection string database hanya boleh digunakan server. Jangan menaruhnya di br
 11. `customer_auth_accounts`
 12. `customer_sessions`
 13. `auth_verification_codes`
+14. `emergency_contacts`
 
 ### Perangkat CCTV
 
-14. `devices`
-15. `device_claim_codes`
-16. `device_claim_attempts`
-17. `device_credentials` (fase 2, belum dipakai)
-18. `device_events` (fase 2, belum dipakai)
+15. `devices`
+16. `device_claim_codes`
+17. `device_claim_attempts`
+18. `device_credentials` (fase 2, belum dipakai)
+19. `device_events` (fase 2, belum dipakai)
 
 ### Subscription
 
-19. `subscription_plans`
-20. `plan_prices`
-21. `subscriptions`
-22. `subscription_events`
+20. `subscription_plans`
+21. `plan_prices`
+22. `subscriptions`
+23. `subscription_events`
 
 ### Billing dan pembayaran
 
-23. `invoices`
-24. `invoice_items`
-25. `payment_attempts`
-26. `payment_webhook_events`
-27. `payment_provider_calls`
-28. `payment_refunds`
+24. `invoices`
+25. `invoice_items`
+26. `payment_attempts`
+27. `payment_webhook_events`
+28. `payment_provider_calls`
+29. `payment_refunds`
+
+### Diskon
+
+30. `discount_vouchers`
+31. `discount_voucher_prices`
+32. `discount_voucher_redemptions`
+33. `plan_flash_sales`
+34. `plan_flash_sale_prices`
 
 ### Infrastruktur API
 
-29. `idempotency_keys`
-30. `scheduled_job_runs`
+35. `idempotency_keys`
+36. `scheduled_job_runs`
 
-Tabel nomor 17 dan 18 dibuat pada migration tetapi sengaja tidak dipakai selama integrasi CCTV belum dikerjakan. Lihat bagian Fase 2.
+Tabel nomor 17 dan 18 dibuat pada migration tetapi sengaja tidak dipakai selama integrasi CCTV belum dikerjakan. Tabel 29 sampai 33 ditambahkan pada migration `0008_discount_module.sql`; batas invoice pada `0009_invoice_discount_limit.sql`. Lihat bagian modul diskon.
 
 ---
 
@@ -735,6 +744,8 @@ provider_total_payment = amount + provider_fee
 
 `provider_total_payment` adalah yang benar-benar dibayar customer dan wajib ditampilkan di aplikasi. `invoices.amount_paid` diisi sebesar `amount`, bukan `provider_total_payment`. Biaya layanan tidak pernah masuk ke `invoices` dan tidak dihitung sebagai pendapatan subscription.
 
+`discount_amount` tidak boleh lebih besar dari `subtotal`, ditegakkan oleh constraint pada migrasi `0009_invoice_discount_limit.sql`. Resolver harga diskon memilih satu aturan paling menguntungkan, bukan menjumlahkan voucher dan flash sale.
+
 `provider_order_id` adalah nilai `order_id` yang dikirim ke Pakasir. Karena Pakasir memakai `order_id` sebagai kunci transaksi dan satu invoice dapat memiliki banyak attempt, nilainya harus unik per attempt:
 
 ```text
@@ -954,7 +965,55 @@ Status: `pending`, `completed`, `failed`.
 
 ---
 
-## 6. Modul infrastruktur API
+## 6. Modul diskon
+
+### `discount_vouchers`
+
+Voucher berkode, dengan potongan persen atau nominal tetap. `scope` menentukan semua harga atau daftar harga terpilih.
+
+```text
+discount_vouchers
+- id uuid PK
+- code text UNIQUE
+- name text
+- description text nullable
+- discount_type text
+- percent_value integer nullable
+- fixed_amount numeric(14,2) nullable
+- scope text
+- starts_at timestamptz nullable
+- ends_at timestamptz nullable
+- max_redemptions integer nullable
+- max_redemptions_per_customer integer
+- min_amount numeric(14,2) nullable
+- applies_to text
+- is_active boolean
+- created_by_admin_id uuid FK -> admin_users.id
+- created_at timestamptz
+- updated_at timestamptz
+```
+
+Kode 3 sampai 32 karakter, huruf besar, angka, `_`, atau `-`. Voucher dinonaktifkan, bukan dihapus,
+karena riwayat redemption menyimpan foreign key. `discount_voucher_prices` menyimpan harga terpilih;
+cakupan `all_prices` tidak boleh memiliki baris terkait.
+
+### `discount_voucher_redemptions`
+
+Satu pelanggan hanya dapat menebus voucher sekali. Kuota total dihitung dari jumlah baris redemption.
+Setiap baris menyimpan nominal sebelum, potongan, dan nominal sesudah untuk audit.
+
+### `plan_flash_sales` dan `plan_flash_sale_prices`
+
+Satu baris flash sale terikat pada satu `plan_id`. Pilihan beberapa paket dari admin membuat beberapa
+baris dalam satu transaksi. Jendela waktu wajib dan tidak boleh bertabrakan pada paket yang sama.
+Harga terpilih harus berasal dari paket barisnya.
+
+Resolver harga tidak menjumlahkan voucher dan flash sale. Jika keduanya berlaku, potongan terbesar
+menang. Batas `invoices.discount_amount <= subtotal` ditambahkan pada `0009_invoice_discount_limit.sql`.
+
+---
+
+## 7. Modul infrastruktur API
 
 ### `idempotency_keys`
 
@@ -1032,7 +1091,7 @@ Nama job yang dipakai: `reconcile_payments`, `reprocess_webhooks`, `expire_payme
 
 ---
 
-## 7. Diagram relasi
+## 8. Diagram relasi
 
 ```text
 ADMIN WEB
@@ -1086,7 +1145,7 @@ scheduled_job_runs
 
 ---
 
-## 8. Aturan bisnis dan keamanan
+## 9. Aturan bisnis dan keamanan
 
 ### Batas perangkat
 
@@ -1203,7 +1262,7 @@ Untuk tindakan seperti void invoice, refund, memberikan paket gratis, suspend cu
 
 Untuk data bisnis, gunakan status seperti `inactive`, `suspended`, `deleted`, atau `void` daripada menghapus permanen. Histori invoice, pembayaran, dan audit harus tetap tersedia.
 
-## Rekomendasi implementasi
+## 10. Rekomendasi implementasi
 
 Urutan migration yang disarankan:
 
