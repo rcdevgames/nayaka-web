@@ -1073,6 +1073,8 @@ GET   /api/v1/admin/admin-users
 POST  /api/v1/admin/admin-users
 PATCH /api/v1/admin/admin-users/{admin_user_id}
 POST  /api/v1/admin/admin-users/{admin_user_id}/deactivate
+POST  /api/v1/admin/admin-users/{admin_user_id}/activate
+DELETE /api/v1/admin/admin-users/{admin_user_id}
 GET   /api/v1/admin/roles
 POST  /api/v1/admin/roles
 PATCH /api/v1/admin/roles/{role_id}

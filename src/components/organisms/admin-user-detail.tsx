@@ -1,12 +1,3 @@
-"use client";
-
-import { ArrowLeftIcon } from "@phosphor-icons/react";
-import Link from "next/link";
-
-import { Button, Timestamp } from "@/components/atoms";
-import { ErrorState, LoadingState, PageHeader, Pagination, StatusLabel } from "@/components/molecules";
-import { useApiQuery, useClientPage } from "@/lib/use-api";
-
 /*
   Detail akun admin.
 
@@ -24,6 +15,331 @@ import { useApiQuery, useClientPage } from "@/lib/use-api";
   Menampilkan peran saja tanpa izin efektif akan membuat operator mengira tahu apa yang bisa
   dilakukan seseorang, padahal yang dipegangnya hanya nama peran.
 */
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { ArrowLeftIcon } from "@phosphor-icons/react";
+import Link from "next/link";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+
+import { Button, Spinner, Timestamp } from "@/components/atoms";
+import {
+  ErrorState,
+  LoadingState,
+  PageHeader,
+  Pagination,
+  StatusLabel,
+  TextField,
+} from "@/components/molecules";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { notifyError, notifySuccess } from "@/lib/alert";
+import { toErrorMessage } from "@/lib/http";
+import { mutate, useApiQuery, useClientPage } from "@/lib/use-api";
+import { DeactivateAdminDialog } from "./admin-user-list";
+
+const formEdit = z.object({
+  full_name: z
+    .string()
+    .trim()
+    .min(2, "Nama lengkap minimal 2 karakter.")
+    .max(120, "Nama lengkap maksimal 120 karakter."),
+  email: z.string().email("Format email tidak sah.").max(160, "Email maksimal 160 karakter."),
+  password: z.string().optional(),
+});
+
+type EditValues = z.infer<typeof formEdit>;
+
+export function EditAdminDialog({
+  open,
+  adminUserId,
+  initialName,
+  initialEmail,
+  onClose,
+  onDone,
+}: {
+  open: boolean;
+  adminUserId: string;
+  initialName: string;
+  initialEmail: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { isSubmitting },
+  } = useForm<EditValues>({
+    resolver: zodResolver(formEdit),
+    defaultValues: { full_name: initialName, email: initialEmail, password: "" },
+  });
+
+  async function submit(values: EditValues) {
+    try {
+      const body: Record<string, unknown> = {};
+      if (values.full_name !== initialName) body.full_name = values.full_name;
+      if (values.email !== initialEmail) body.email = values.email;
+      if (values.password) body.password = values.password;
+
+      if (Object.keys(body).length === 0) {
+        onClose();
+        return;
+      }
+
+      await mutate(`/api/v1/admin/admin-users/${adminUserId}`, {
+        method: "PATCH",
+        body: { ...body, reason: "Pembaruan data akun admin" },
+      });
+
+      notifySuccess("Perubahan tersimpan", "Data akun admin telah diperbarui.");
+      reset({ full_name: values.full_name, email: values.email, password: "" });
+      onDone();
+    } catch (error) {
+      notifyError("Gagal menyimpan", toErrorMessage(error));
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          reset({ full_name: initialName, email: initialEmail, password: "" });
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Edit {initialName}</DialogTitle>
+          <DialogDescription>
+            Ubah nama lengkap, alamat email, atau kata sandi. Biarkan kolom kata sandi kosong
+            jika tidak ingin mengubahnya.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form noValidate onSubmit={handleSubmit(submit)} className="flex flex-col gap-4">
+          <TextField<EditValues>
+            control={control}
+            name="full_name"
+            label="Nama lengkap"
+            placeholder="Contoh: Budi Santoso"
+            required
+          />
+
+          <TextField<EditValues>
+            control={control}
+            name="email"
+            label="Alamat email"
+            type="email"
+            placeholder="Contoh: budi@nayaka.id"
+            required
+          />
+
+          <TextField<EditValues>
+            control={control}
+            name="password"
+            label="Kata sandi baru"
+            type="password"
+            placeholder="Kosongkan jika tidak ingin mengubah"
+          />
+
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? <Spinner label="Menyimpan" /> : "Simpan perubahan"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const formDelete = z.object({
+  confirm: z.string().min(1, "Konfirmasi wajib diisi."),
+});
+
+type DeleteValues = z.infer<typeof formDelete>;
+
+export function DeleteAdminDialog({
+  open,
+  adminUserId,
+  fullName,
+  onClose,
+  onDone,
+}: {
+  open: boolean;
+  adminUserId: string;
+  fullName: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { isSubmitting },
+  } = useForm<DeleteValues>({
+    resolver: zodResolver(formDelete),
+    defaultValues: { confirm: "" },
+  });
+
+  async function submit(values: DeleteValues) {
+    if (values.confirm !== "HAPUS") return;
+    try {
+      await mutate(`/api/v1/admin/admin-users/${adminUserId}`, {
+        method: "DELETE",
+      });
+      notifySuccess("Akun dihapus", `${fullName} telah dihapus secara permanen.`);
+      reset();
+      onDone();
+    } catch (error) {
+      notifyError("Gagal menghapus", toErrorMessage(error));
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          reset();
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Hapus {fullName}?</DialogTitle>
+          <DialogDescription>
+            Tindakan ini tidak dapat dibatalkan. Akun, peran, dan seluruh sesinya akan dihapus
+            secara permanen dari sistem.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form noValidate onSubmit={handleSubmit(submit)} className="flex flex-col gap-4">
+          <TextField<DeleteValues>
+            control={control}
+            name="confirm"
+            label="Konfirmasi hapus"
+            placeholder="Ketik HAPUS"
+            required
+          />
+
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
+              Batal
+            </Button>
+            <Button type="submit" variant="destructive" disabled={isSubmitting}>
+              {isSubmitting ? <Spinner label="Menghapus" /> : "Hapus permanen"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const formActivate = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(10, "Alasan minimal 10 karakter.")
+    .max(500, "Alasan maksimal 500 karakter."),
+});
+
+type ActivateValues = z.infer<typeof formActivate>;
+
+export function ActivateAdminDialog({
+  open,
+  adminUserId,
+  fullName,
+  onClose,
+  onDone,
+}: {
+  open: boolean;
+  adminUserId: string;
+  fullName: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { isSubmitting },
+  } = useForm<ActivateValues>({
+    resolver: zodResolver(formActivate),
+    defaultValues: { reason: "" },
+  });
+
+  async function submit(values: ActivateValues) {
+    try {
+      await mutate(`/api/v1/admin/admin-users/${adminUserId}/activate`, {
+        method: "POST",
+        body: values,
+      });
+      notifySuccess("Akun diaktifkan", `${fullName} sekarang aktif kembali.`);
+      reset();
+      onDone();
+    } catch (error) {
+      notifyError("Gagal mengaktifkan", toErrorMessage(error));
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          reset();
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Aktifkan {fullName}?</DialogTitle>
+          <DialogDescription>
+            Akun ini akan kembali aktif dan dapat masuk ke konsol. Sesi baru perlu dibuat
+            setelah masuk kembali.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form noValidate onSubmit={handleSubmit(submit)} className="flex flex-col gap-4">
+          <TextField<ActivateValues>
+            control={control}
+            name="reason"
+            label="Alasan pengaktifan"
+            placeholder="Contoh: karyawan kembali bekerja"
+            required
+          />
+
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? <Spinner label="Memproses" /> : "Aktifkan akun"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 type Detail = {
   admin_user: {
@@ -57,6 +373,10 @@ type Detail = {
 */
 export function AdminUserDetail({ adminUserId }: { adminUserId: string }) {
   const query = useApiQuery<Detail>(`/api/v1/admin/admin-users/${adminUserId}`);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [activateOpen, setActivateOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   /*
     Hook paginasi harus dipanggil sebelum cabang muat/gagal di bawah, karena cabang itu
@@ -82,6 +402,11 @@ export function AdminUserDetail({ adminUserId }: { adminUserId: string }) {
 
   const { admin_user: user, roles, effective_permissions: permissions, sessions, is_self: isSelf } =
     query.data;
+
+  const canEdit = !isSelf && user.status === "active" && !user.is_super_admin;
+  const canDeactivate = !isSelf && user.status === "active" && !user.is_super_admin;
+  const canActivate = user.status === "inactive" && !user.is_super_admin;
+  const canDelete = user.status === "inactive" && !user.is_super_admin;
 
   return (
     <div className="flex flex-col gap-6">
@@ -246,7 +571,80 @@ export function AdminUserDetail({ adminUserId }: { adminUserId: string }) {
         <Button asChild variant="ghost">
           <Link href="/roles">Kelola peran</Link>
         </Button>
+
+        {!isSelf && canEdit && (
+          <Button variant="outline" onClick={() => setEditOpen(true)}>
+            Edit data
+          </Button>
+        )}
+
+        {!isSelf && canDeactivate && (
+          <Button variant="outline" onClick={() => setDeactivateOpen(true)}>
+            Nonaktifkan
+          </Button>
+        )}
+
+        {!isSelf && canActivate && (
+          <Button variant="outline" onClick={() => setActivateOpen(true)}>
+            Aktifkan
+          </Button>
+        )}
+
+        {!isSelf && canDelete && (
+          <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+            Hapus permanen
+          </Button>
+        )}
       </div>
+
+      {!isSelf && (
+        <>
+          <EditAdminDialog
+            open={editOpen}
+            adminUserId={user.id}
+            initialName={user.full_name}
+            initialEmail={user.email}
+            onClose={() => setEditOpen(false)}
+            onDone={() => {
+              setEditOpen(false);
+              query.reload();
+            }}
+          />
+
+          <DeactivateAdminDialog
+            open={deactivateOpen}
+            adminUserId={user.id}
+            fullName={user.full_name}
+            onClose={() => setDeactivateOpen(false)}
+            onDone={() => {
+              setDeactivateOpen(false);
+              query.reload();
+            }}
+          />
+
+          <ActivateAdminDialog
+            open={activateOpen}
+            adminUserId={user.id}
+            fullName={user.full_name}
+            onClose={() => setActivateOpen(false)}
+            onDone={() => {
+              setActivateOpen(false);
+              query.reload();
+            }}
+          />
+
+          <DeleteAdminDialog
+            open={deleteOpen}
+            adminUserId={user.id}
+            fullName={user.full_name}
+            onClose={() => setDeleteOpen(false)}
+            onDone={() => {
+              setDeleteOpen(false);
+              query.reload();
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }
