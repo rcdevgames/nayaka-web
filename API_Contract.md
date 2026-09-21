@@ -914,6 +914,7 @@ Master user pertama dibuat melalui seed atau CLI, bukan register publik.
 
 ```http
 GET   /api/v1/admin/customers
+POST  /api/v1/admin/customers
 GET   /api/v1/admin/customers/{customer_id}
 PATCH /api/v1/admin/customers/{customer_id}
 POST  /api/v1/admin/customers/{customer_id}/suspend
@@ -921,6 +922,8 @@ POST  /api/v1/admin/customers/{customer_id}/activate
 ```
 
 Filter list: `status`, `q` (nama atau email), `created_from`, `created_to`.
+
+`POST` membuat akun pelanggan manual dari konsol (izin `customer.create`). Body: `full_name` wajib, minimal satu dari `email` + `password` atau `phone_e164`. Akun langsung aktif dan cara masuknya langsung terverifikasi; kata sandi tidak dikembalikan dalam response. Duplikat email → `EMAIL_ALREADY_REGISTERED` (409), duplikat nomor WhatsApp → `PHONE_ALREADY_LINKED` (409).
 
 ### Device
 
