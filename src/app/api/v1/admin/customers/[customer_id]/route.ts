@@ -21,7 +21,7 @@ import { requireAdmin, requireCsrf, requirePermission } from "@/lib/server/guard
 import { parseJson } from "@/lib/server/parse";
 import { ok, requireUuid } from "@/lib/server/request";
 import { routeHandler } from "@/lib/server/route";
-import { updateCustomerSchema } from "@/lib/schemas/admin-customer";
+import { activateCustomerSchema, updateCustomerSchema } from "@/lib/schemas/admin-customer";
 
 type Params = { params: Promise<{ customer_id?: string }> };
 
@@ -242,5 +242,101 @@ export const PATCH = routeHandler(
     });
 
     return ok({ customer: { id: customerId, full_name: result.fullName } }, requestId);
+  },
+);
+
+/*
+  Menghapus pelanggan dari konsol.
+
+  Penghapusan di sini bukan DELETE baris: status pelanggan berubah menjadi `deleted`, seluruh
+  sesi aplikasinya dicabut, dan histori tagihan serta auditnya tetap tersimpan. Ini pola yang
+  sama dengan penghapusan oleh pelanggan sendiri dari aplikasi, supaya "akun dihapus" punya
+  satu arti saja di seluruh sistem.
+
+  Alasan wajib, sama seperti penangguhan: akun yang dihapus menghilang dari daftar, dan
+  pertanyaan "kemana akun ini" harus bisa dijawab dari catatan, bukan dari ingatan.
+*/
+export const DELETE = routeHandler(
+  "admin.customers.delete",
+  async (request, requestId, context) => {
+    const admin = await requireAdmin();
+    requirePermission(admin, "customer.delete");
+    await requireCsrf(request);
+
+    const { customer_id: rawId } = await (context as Params).params;
+    const customerId = requireUuid(rawId, "customer_id");
+    const input = await parseJson(request, activateCustomerSchema);
+
+    const result = await withTransaction(async (client) => {
+      const customer = await lockCustomer(client, customerId);
+
+      if (customer.status === "deleted") {
+        throw new AppError({
+          code: "RESOURCE_NOT_FOUND",
+          message: `Akun ${customer.full_name} sudah dihapus sebelumnya. Histori tagihannya tetap tersimpan.`,
+        });
+      }
+
+      /*
+        Perangkat yang masih terpasang pada akun yang dihapus dilepas lebih dulu mengikuti pola
+        unassign resmi: kembali ke gudang, metode klaim dibersihkan, supaya perangkat itu bisa
+        diklaim lagi oleh akun lain. Tanpa ini, perangkat pelanggan yang dihapus tersangkut
+        selamanya pada akun yang tidak bisa masuk.
+      */
+      const devices = await client.query(
+        `UPDATE devices
+         SET customer_id = NULL, status = 'in_stock', claim_method = NULL,
+             claimed_at = NULL, activated_at = NULL, deactivated_at = now()
+         WHERE customer_id = $1 AND status = 'claimed'`,
+        [customerId],
+      );
+
+      await client.query("UPDATE customers SET status = 'deleted' WHERE id = $1", [customerId]);
+
+      const sessions = await client.query(
+        `UPDATE customer_sessions SET revoked_at = now()
+         WHERE customer_id = $1 AND revoked_at IS NULL`,
+        [customerId],
+      );
+
+      await writeAudit(client, {
+        actor: {
+          adminUserId: admin.identity.id,
+          ipAddress: admin.ipAddress,
+          userAgent: admin.userAgent,
+        },
+        action: "customer.delete",
+        entityType: "customer",
+        entityId: customerId,
+        oldData: { status: customer.status, full_name: customer.full_name },
+        newData: {
+          status: "deleted",
+          reason: input.reason,
+          devices_released: devices.rowCount ?? 0,
+          sessions_revoked: sessions.rowCount ?? 0,
+        },
+      });
+
+      return {
+        name: customer.full_name,
+        devicesReleased: devices.rowCount ?? 0,
+        sessionsRevoked: sessions.rowCount ?? 0,
+      };
+    });
+
+    return ok(
+      {
+        customer: { id: customerId, status: "deleted" },
+        effect: {
+          devices_released: result.devicesReleased,
+          sessions_revoked: result.sessionsRevoked,
+          note:
+            result.devicesReleased > 0
+              ? `${result.devicesReleased} perangkat dilepas dan dapat diklaim akun lain. Histori tagihan tetap tersimpan.`
+              : "Histori tagihan pelanggan tetap tersimpan.",
+        },
+      },
+      requestId,
+    );
   },
 );

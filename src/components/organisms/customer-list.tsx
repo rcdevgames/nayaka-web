@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { PlusIcon } from "@phosphor-icons/react";
+import { PencilSimpleIcon, PlusIcon, ProhibitIcon, TrashIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { z } from "zod";
 
 import { Button, Spinner, Timestamp } from "@/components/atoms";
 import {
@@ -28,7 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { notifyError, notifySuccess } from "@/lib/alert";
+import { confirmAction, notifyError, notifySuccess } from "@/lib/alert";
 import { formatNumber } from "@/lib/format";
 import { toErrorMessage } from "@/lib/http";
 import { PASSWORD_HINT } from "@/lib/password-rules";
@@ -87,6 +88,8 @@ function providerLabel(provider: string): string {
 export function CustomerList() {
   const query = usePagedQuery<CustomersResponse>("/api/v1/admin/customers");
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<CustomerRow | null>(null);
+  const [suspendTarget, setSuspendTarget] = useState<CustomerRow | null>(null);
 
   const filters: FilterDefinition[] = [
     {
@@ -109,6 +112,31 @@ export function CustomerList() {
 
   const rows = query.data?.customers ?? [];
   const summary = query.data?.summary;
+
+  async function deleteCustomer(row: CustomerRow) {
+    const confirmed = await confirmAction({
+      title: `Hapus akun ${row.full_name}?`,
+      text:
+        (row.device_count > 0
+          ? `${row.device_count} perangkatnya dilepas dan dapat diklaim akun lain. `
+          : "") +
+        "Sesi aplikasinya dicabut dan akun menghilang dari daftar, tetapi histori tagihannya tetap tersimpan.",
+      confirmLabel: "Ya, hapus akun",
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    try {
+      await mutate(`/api/v1/admin/customers/${row.id}`, {
+        method: "DELETE",
+        body: { reason: "Dihapus admin dari daftar pelanggan." },
+      });
+      notifySuccess("Pelanggan dihapus", `Akun ${row.full_name} tidak lagi tampil di daftar.`);
+      query.reload();
+    } catch (error) {
+      notifyError("Pelanggan gagal dihapus", toErrorMessage(error));
+    }
+  }
 
   const columns: Column<CustomerRow>[] = [
     {
@@ -187,6 +215,46 @@ export function CustomerList() {
       key: "created_at",
       header: "Terdaftar",
       cell: (row) => <Timestamp value={row.created_at} />,
+    },
+    /*
+      Aksi baris. Nama pelanggan sendiri sudah menjadi tautan ke detail, jadi kolom ini hanya
+      memuat tindakan yang mengubah sesuatu. Tangguhkan hanya untuk akun aktif — akun yang
+      sudah ditangguhkan diaktifkan kembali dari halaman detailnya, karena keputusan itu perlu
+      melihat riwayatnya lebih dulu.
+    */
+    {
+      key: "actions",
+      header: "Aksi",
+      cell: (row) => (
+        <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={`Perbaiki nama ${row.full_name}`}
+            onClick={() => setEditTarget(row)}
+          >
+            <PencilSimpleIcon aria-hidden className="size-4" />
+          </Button>
+          {row.status === "active" ? (
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label={`Tangguhkan ${row.full_name}`}
+              onClick={() => setSuspendTarget(row)}
+            >
+              <ProhibitIcon aria-hidden className="size-4" />
+            </Button>
+          ) : null}
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={`Hapus ${row.full_name}`}
+            onClick={() => void deleteCustomer(row)}
+          >
+            <TrashIcon aria-hidden className="size-4" />
+          </Button>
+        </div>
+      ),
     },
   ];
 
@@ -281,6 +349,24 @@ export function CustomerList() {
         onClose={() => setCreateOpen(false)}
         onDone={() => {
           setCreateOpen(false);
+          query.reload();
+        }}
+      />
+
+      <EditNameRowDialog
+        target={editTarget}
+        onClose={() => setEditTarget(null)}
+        onDone={() => {
+          setEditTarget(null);
+          query.reload();
+        }}
+      />
+
+      <SuspendRowDialog
+        target={suspendTarget}
+        onClose={() => setSuspendTarget(null)}
+        onDone={() => {
+          setSuspendTarget(null);
           query.reload();
         }}
       />
@@ -404,6 +490,200 @@ function CreateCustomerDialog({
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? <Spinner label="Menyimpan" /> : null}
               {isSubmitting ? "Menyimpan..." : "Simpan pelanggan"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/*
+  Dialog aksi baris: perbaiki nama atau tangguhkan akun.
+
+  Keduanya dipisah (bukan satu dialog dengan field bergantian) supaya tiap formulir punya skema
+  zod dan urutan hook yang tetap, tanpa resolver yang disaring per aksi. Alasan penangguhan
+  tetap wajib sama seperti di halaman detail — daftar yang bisa menangguhkan tanpa alasan
+  adalah jalan pintas yang mengosongkan jejak audit.
+*/
+const editNameSchema = z.object({
+  full_name: z
+    .string()
+    .trim()
+    .min(2, "Nama minimal 2 karakter.")
+    .max(120, "Nama maksimal 120 karakter."),
+});
+
+const suspendSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(10, "Alasan minimal 10 karakter supaya cukup menjelaskan keputusannya.")
+    .max(500, "Alasan maksimal 500 karakter."),
+});
+
+type EditNameValues = z.infer<typeof editNameSchema>;
+type SuspendValues = z.infer<typeof suspendSchema>;
+
+function EditNameRowDialog({
+  target,
+  onClose,
+  onDone,
+}: {
+  target: CustomerRow | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { isSubmitting },
+  } = useForm<EditNameValues>({
+    resolver: zodResolver(editNameSchema),
+    values: { full_name: target?.full_name ?? "" },
+  });
+
+  async function submit(values: EditNameValues) {
+    if (!target) return;
+    try {
+      await mutate(`/api/v1/admin/customers/${target.id}`, {
+        method: "PATCH",
+        body: values,
+      });
+      notifySuccess("Nama diperbarui", `Nama pelanggan kini ${values.full_name}.`);
+      reset();
+      onDone();
+    } catch (error) {
+      notifyError("Nama gagal diperbarui", toErrorMessage(error));
+    }
+  }
+
+  return (
+    <Dialog
+      open={target !== null}
+      onOpenChange={(open) => {
+        if (!open) {
+          reset();
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Perbaiki nama {target?.full_name ?? ""}</DialogTitle>
+          <DialogDescription>
+            Hanya nama yang dapat diubah di sini. Alamat email dan nomor WhatsApp hanya dapat
+            diubah pelanggan sendiri lewat aplikasi.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form noValidate onSubmit={handleSubmit(submit)} className="flex flex-col gap-4">
+          <TextField<EditNameValues>
+            control={control}
+            name="full_name"
+            label="Nama lengkap"
+            placeholder="Nama sesuai catatan pelanggan"
+            required
+          />
+
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? <Spinner label="Menyimpan" /> : null}
+              Simpan nama
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SuspendRowDialog({
+  target,
+  onClose,
+  onDone,
+}: {
+  target: CustomerRow | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { isSubmitting },
+  } = useForm<SuspendValues>({
+    resolver: zodResolver(suspendSchema),
+    values: { reason: "" },
+  });
+
+  async function submit(values: SuspendValues) {
+    if (!target) return;
+    try {
+      const result = await mutate<{ effect?: { note?: string } }>(
+        `/api/v1/admin/customers/${target.id}/suspend`,
+        {
+          method: "POST",
+          body: {
+            reason: values.reason,
+            /*
+              Jumlah perangkatnya sudah terbaca di baris daftar, jadi persetujuannya diminta
+              lewat konfirmasi sebelum dialog dibuka, bukan kotak centang kedua di sini.
+            */
+            acknowledge_devices: target.device_count > 0,
+          },
+        },
+      );
+      notifySuccess("Akun ditangguhkan", result.effect?.note ?? `${target.full_name} ditangguhkan.`);
+      reset();
+      onDone();
+    } catch (error) {
+      notifyError("Akun gagal ditangguhkan", toErrorMessage(error));
+    }
+  }
+
+  return (
+    <Dialog
+      open={target !== null}
+      onOpenChange={(open) => {
+        if (!open) {
+          reset();
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Tangguhkan {target?.full_name ?? ""}?</DialogTitle>
+          <DialogDescription>
+            Seluruh perangkat pelanggan berhenti melayani dan sesi aplikasinya dicabut.
+            {target && target.device_count > 0
+              ? ` Pelanggan ini punya ${target.device_count} perangkat terpasang.`
+              : ""}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form noValidate onSubmit={handleSubmit(submit)} className="flex flex-col gap-4">
+          <TextField<SuspendValues>
+            control={control}
+            name="reason"
+            label="Alasan"
+            placeholder="Contoh: menunggak pembayaran lebih dari tiga puluh hari"
+            hint="Tersimpan pada jejak audit, jadi sebutkan dasar keputusannya."
+            required
+          />
+
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
+              Batal
+            </Button>
+            <Button type="submit" variant="destructive" disabled={isSubmitting}>
+              {isSubmitting ? <Spinner label="Memproses" /> : null}
+              Tangguhkan akun
             </Button>
           </DialogFooter>
         </form>

@@ -15,7 +15,7 @@ Konsol admin Nayaka: Next.js 16 App Router, satu proyek berisi backend dan antar
 |---|---|---|
 | Halaman | 25 | Termasuk halaman masuk dan dua halaman diskon |
 | Endpoint API | 57 rute admin + health | Termasuk POST /customers untuk tambah manual |
-| Tabel database | 35 | 16 migrasi terpasang di Supabase |
+| Tabel database | 35 | 17 migrasi terpasang di Supabase |
 | Komponen | 14 ui + 11 atom + 17 molekul + 26 organisme | Metode atom dan molekul |
 | Skema zod | 11 | Dipakai bersama klien dan server |
 
@@ -146,7 +146,9 @@ tanggal UTC dan pada pukul 07.00 WIB tanggalnya masih kemarin.
 **Pelanggan**
 
 - `/customers`: ringkasan, pencarian, filter status, tombol tambah pelanggan manual (izin
-  `customer.create`). Kolom: Nama, Kontak, Cara masuk, Status akun, Paket, Perangkat, Terdaftar
+  `customer.create`). Kolom: Nama, Kontak, Cara masuk, Status akun, Paket, Perangkat, Terdaftar,
+  Aksi (edit nama, tangguhkan, hapus — tangguhkan/hapus wajib alasan; hapus = soft delete,
+  sesi dicabut, perangkat dilepas ke gudang)
 - `/customers/[id]`: profil, perangkat, riwayat langganan dan tagihan, tangguhkan dengan alasan
 
 **Perangkat**
