@@ -3,7 +3,7 @@
 Catatan keadaan proyek Nayaka. Tujuannya supaya pekerjaan bisa dilanjutkan tanpa membaca ulang
 seluruh riwayat percakapan, dan supaya keputusan yang belum selesai tidak hilang.
 
-Terakhir diperbarui: 14 September 2026. Konsol berjalan di pm2 sebagai proses `nayaka`, port 3101.
+Terakhir diperbarui: 21 September 2026. Konsol berjalan di pm2 sebagai proses `nayaka`, port 3101.
 
 ---
 
@@ -14,8 +14,8 @@ Konsol admin Nayaka: Next.js 16 App Router, satu proyek berisi backend dan antar
 | Bagian | Jumlah | Keterangan |
 |---|---|---|
 | Halaman | 25 | Termasuk halaman masuk dan dua halaman diskon |
-| Endpoint API | 55 rute | 54 admin + health |
-| Tabel database | 35 | 9 migrasi terpasang di Supabase |
+| Endpoint API | 57 rute admin + health | Termasuk POST /customers untuk tambah manual |
+| Tabel database | 35 | 16 migrasi terpasang di Supabase |
 | Komponen | 14 ui + 11 atom + 17 molekul + 26 organisme | Metode atom dan molekul |
 | Skema zod | 11 | Dipakai bersama klien dan server |
 
@@ -145,8 +145,8 @@ tanggal UTC dan pada pukul 07.00 WIB tanggalnya masih kemarin.
 
 **Pelanggan**
 
-- `/customers`: ringkasan, pencarian, filter status. Kolom: Nama, Kontak, Cara masuk,
-  Status akun, Paket, Perangkat, Terdaftar
+- `/customers`: ringkasan, pencarian, filter status, tombol tambah pelanggan manual (izin
+  `customer.create`). Kolom: Nama, Kontak, Cara masuk, Status akun, Paket, Perangkat, Terdaftar
 - `/customers/[id]`: profil, perangkat, riwayat langganan dan tagihan, tangguhkan dengan alasan
 
 **Perangkat**

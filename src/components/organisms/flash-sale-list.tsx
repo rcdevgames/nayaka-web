@@ -573,7 +573,7 @@ function FormShell({
         if (!open) onClose?.();
       }}
     >
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -673,45 +673,51 @@ function FlashSaleForm({
 
   return (
     <form noValidate onSubmit={handleSubmit(submit)} className="flex flex-col gap-4">
-      {flashSale ? (
-        <div className="flex flex-col gap-1">
-          <span className="text-[13px] font-medium">Paket</span>
-          <span className="text-[13px]">{flashSale.plan_name}</span>
-          <p className="text-muted-foreground text-[13px]">
-            Paket tidak dapat dipindahkan setelah barisnya dibuat. Aturan bentrok jadwal sudah
-            diperiksa terhadap paket ini, dan memindahkannya akan membuat pemeriksaan itu tidak lagi
-            berlaku.
-          </p>
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-4">
+          {flashSale ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-[13px] font-medium">Paket</span>
+              <span className="text-[13px]">{flashSale.plan_name}</span>
+              <p className="text-muted-foreground text-[13px]">
+                Paket tidak dapat dipindahkan setelah barisnya dibuat. Aturan bentrok jadwal sudah
+                diperiksa terhadap paket ini, dan memindahkannya akan membuat pemeriksaan itu tidak lagi
+                berlaku.
+              </p>
+            </div>
+          ) : (
+            <PlanPicker
+              plans={options.plans}
+              selected={planIds}
+              onChange={setPlanIds}
+              error={planError ?? undefined}
+            />
+          )}
+
+          <DiscountFields
+            control={control}
+            nameLabel="Nama flash sale"
+            namePlaceholder="Contoh: Flash sale September"
+            nameHint="Nama ini yang muncul di daftar dan di pesan bentrok jadwal, jadi pakai nama yang membedakannya dari flash sale lain."
+            nameRequired
+          />
         </div>
-      ) : (
-        <PlanPicker
-          plans={options.plans}
-          selected={planIds}
-          onChange={setPlanIds}
-          error={planError ?? undefined}
-        />
-      )}
 
-      <DiscountFields
-        control={control}
-        nameLabel="Nama flash sale"
-        namePlaceholder="Contoh: Flash sale September"
-        nameHint="Nama ini yang muncul di daftar dan di pesan bentrok jadwal, jadi pakai nama yang membedakannya dari flash sale lain."
-        nameRequired
-      />
+        <div className="flex min-w-0 flex-col gap-4">
+          <WindowFields control={control} requireWindow />
 
-      <WindowFields control={control} requireWindow />
-
-      {scope === "selected_prices" ? (
-        <PricePicker
-          prices={options.prices}
-          selected={priceIds}
-          onChange={setPriceIds}
-          limitToPlanIds={flashSale ? [flashSale.plan_id] : planIds}
-          hint="Hanya harga milik paket yang dipilih di atas yang dapat dicentang. Harga paket lain akan melanggar arti cakupannya."
-          error={priceError ?? undefined}
-        />
-      ) : null}
+          {scope === "selected_prices" ? (
+            <PricePicker
+              prices={options.prices}
+              selected={priceIds}
+              onChange={setPriceIds}
+              limitToPlanIds={flashSale ? [flashSale.plan_id] : planIds}
+              hint="Hanya harga milik paket yang dipilih di atas yang dapat dicentang. Harga paket lain akan melanggar arti cakupannya."
+              error={priceError ?? undefined}
+            />
+          ) : null}
+        </div>
+      </div>
 
       {errors.root?.message ? (
         <p className="text-danger text-[13px]" role="alert">

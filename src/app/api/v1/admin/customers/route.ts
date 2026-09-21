@@ -10,10 +10,17 @@
   Karena itu filter `q` mencakup ketiga identitas sekaligus, dan ringkasannya memuat jumlah
   pelanggan aktif tanpa perangkat.
 */
-import { query } from "@/lib/server/db";
-import { customerFilterConditions, customerSummary, type CustomerListRow } from "@/lib/server/customers";
+import { query, withTransaction } from "@/lib/server/db";
+import { writeAudit } from "@/lib/server/audit";
+import {
+  createCustomer,
+  customerFilterConditions,
+  customerSummary,
+  type CustomerListRow,
+} from "@/lib/server/customers";
 import { AppError } from "@/lib/server/errors";
-import { requireAdmin, requirePermission } from "@/lib/server/guard";
+import { requireAdmin, requireCsrf, requirePermission } from "@/lib/server/guard";
+import { parseJson } from "@/lib/server/parse";
 import {
   buildPage,
   keysetCondition,
@@ -21,8 +28,9 @@ import {
   parsePageRequest,
   type SortAllowlist,
 } from "@/lib/server/pagination";
-import { listed } from "@/lib/server/request";
+import { created, listed } from "@/lib/server/request";
 import { routeHandler } from "@/lib/server/route";
+import { createCustomerSchema } from "@/lib/schemas/admin-customer";
 
 /*
   Kolom yang boleh dipakai untuk mengurutkan. Daftar tertutup, bukan nilai bebas, karena nama
@@ -141,4 +149,49 @@ export const GET = routeHandler("admin.customers.list", async (request, requestI
     pagination,
     requestId,
   );
+});
+
+/*
+  Pembuatan pelanggan manual dari konsol.
+
+  Jalur ini ada untuk pendaftaran yang tidak terjadi di aplikasi: pelanggan korporat yang
+  didaftarkan sales, atau pelanggan yang mendaftar lewat telepon. Akun yang dibuat di sini
+  langsung aktif dan cara masuknya langsung terverifikasi, karena adminlah yang menerima
+  identitasnya secara langsung — meminta verifikasi ulang kepada pelanggan berarti konsol
+  meragukan tindakan adminnya sendiri.
+
+  Kata sandi yang diisi operator tidak ditampilkan lagi setelah akun dibuat; penyampaiannya
+  kepada pelanggan adalah tanggung jawab operator, lewat jalur yang aman.
+*/
+export const POST = routeHandler("admin.customers.create", async (request, requestId) => {
+  const admin = await requireAdmin();
+  requirePermission(admin, "customer.create");
+  await requireCsrf(request);
+
+  const input = await parseJson(request, createCustomerSchema);
+
+  const customer = await withTransaction(async (client) => {
+    const createdCustomer = await createCustomer(client, input);
+
+    await writeAudit(client, {
+      actor: {
+        adminUserId: admin.identity.id,
+        ipAddress: admin.ipAddress,
+        userAgent: admin.userAgent,
+      },
+      action: "customer.create",
+      entityType: "customer",
+      entityId: createdCustomer.id,
+      newData: {
+        full_name: createdCustomer.full_name,
+        email: createdCustomer.email,
+        phone_e164: createdCustomer.phone_e164,
+        providers: createdCustomer.providers,
+      },
+    });
+
+    return createdCustomer;
+  });
+
+  return created({ customer }, requestId);
 });

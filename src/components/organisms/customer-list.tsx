@@ -1,8 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { PlusIcon } from "@phosphor-icons/react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 
-import { Timestamp } from "@/components/atoms";
+import { Button, Spinner, Timestamp } from "@/components/atoms";
 import {
   Column,
   DataTable,
@@ -12,11 +16,24 @@ import {
   Pagination,
   StatCard,
   StatusLabel,
+  TextField,
   statusTone,
   type FilterDefinition,
 } from "@/components/molecules";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { notifyError, notifySuccess } from "@/lib/alert";
 import { formatNumber } from "@/lib/format";
-import { tableStatus, usePagedQuery } from "@/lib/use-api";
+import { toErrorMessage } from "@/lib/http";
+import { PASSWORD_HINT } from "@/lib/password-rules";
+import { createCustomerSchema, type CreateCustomerInput } from "@/lib/schemas/admin-customer";
+import { mutate, tableStatus, usePagedQuery } from "@/lib/use-api";
 
 /*
   Daftar pelanggan.
@@ -69,6 +86,7 @@ function providerLabel(provider: string): string {
 
 export function CustomerList() {
   const query = usePagedQuery<CustomersResponse>("/api/v1/admin/customers");
+  const [createOpen, setCreateOpen] = useState(false);
 
   const filters: FilterDefinition[] = [
     {
@@ -177,11 +195,12 @@ export function CustomerList() {
       <PageHeader
         title="Pelanggan"
         description="Akun pelanggan aplikasi Nayaka. Perangkat dan langganan pelanggan dikelola dari halaman detail masing-masing."
-        /*
-          Tidak ada tombol tambah di sini, dan itu disengaja: pendaftaran pelanggan terjadi di
-          aplikasi mobile. Tombol "Tambah pelanggan" yang membuka formulir kosong akan menjadi
-          kontrol mati, karena tidak ada jalur sah untuk membuat akun pelanggan dari konsol.
-        */
+        actions={
+          <Button onClick={() => setCreateOpen(true)}>
+            <PlusIcon aria-hidden />
+            Tambah pelanggan
+          </Button>
+        }
       />
 
       {query.status === "galat" ? null : (
@@ -256,6 +275,139 @@ export function CustomerList() {
         onNext={query.nextPage}
         onLimitChange={query.setLimit}
       />
+
+      <CreateCustomerDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onDone={() => {
+          setCreateOpen(false);
+          query.reload();
+        }}
+      />
     </div>
+  );
+}
+
+/*
+  Dialog penambahan pelanggan manual.
+
+  Dipisah dari daftar supaya formulir dan hook-nya hanya hidup saat dialog dibuka, bukan
+  sepanjang halaman daftar ditampilkan. Menutup dialog mengosongkan isian, karena kata sandi
+  yang tertinggal di formulir yang dibuka ulang adalah kata sandi yang paling mudah terkirim
+  dua kali tanpa disadari.
+*/
+function CreateCustomerDialog({
+  open,
+  onClose,
+  onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { isSubmitting },
+  } = useForm<CreateCustomerInput>({
+    resolver: zodResolver(createCustomerSchema),
+    defaultValues: { full_name: "", email: undefined, password: "", phone_e164: undefined },
+  });
+
+  async function submit(values: CreateCustomerInput) {
+    try {
+      const result = await mutate<{ customer: { id: string; full_name: string } }>(
+        "/api/v1/admin/customers",
+        {
+          method: "POST",
+          body: {
+            full_name: values.full_name,
+            ...(values.email ? { email: values.email, password: values.password } : {}),
+            ...(values.phone_e164 ? { phone_e164: values.phone_e164 } : {}),
+          },
+        },
+      );
+      notifySuccess(
+        "Pelanggan ditambahkan",
+        `Akun ${result.customer.full_name} sudah aktif dan dapat dipakai masuk.`,
+      );
+      reset();
+      onDone();
+    } catch (error) {
+      const message = toErrorMessage(error);
+      setError("root", { message });
+      notifyError("Pelanggan gagal ditambahkan", message);
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          reset();
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Tambah pelanggan</DialogTitle>
+          <DialogDescription>
+            Akun langsung aktif dan cara masuknya langsung terverifikasi, jadi pastikan
+            identitasnya benar sebelum menyimpan. Kata sandi tidak ditampilkan lagi setelah
+            akun dibuat — sampaikan kepada pelanggan lewat jalur yang aman.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form noValidate onSubmit={handleSubmit(submit)} className="flex flex-col gap-4">
+          <TextField<CreateCustomerInput>
+            control={control}
+            name="full_name"
+            label="Nama lengkap"
+            placeholder="Contoh: Budi Santoso"
+            required
+          />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField<CreateCustomerInput>
+              control={control}
+              name="email"
+              label="Email"
+              placeholder="nama@contoh.com"
+              hint="Cara masuk pertama. Boleh dikosongkan bila hanya memakai WhatsApp."
+            />
+            <TextField<CreateCustomerInput>
+              control={control}
+              name="password"
+              label="Kata sandi"
+              type="password"
+              placeholder="Kata sandi awal"
+              hint={PASSWORD_HINT}
+            />
+          </div>
+
+          <TextField<CreateCustomerInput>
+            control={control}
+            name="phone_e164"
+            label="Nomor WhatsApp"
+            placeholder="+6281234567890"
+            hint="Format internasional dengan tanda plus di depan. Boleh dikosongkan bila hanya memakai email."
+          />
+
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? <Spinner label="Menyimpan" /> : null}
+              {isSubmitting ? "Menyimpan..." : "Simpan pelanggan"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -2,6 +2,8 @@ import type { PoolClient } from "pg";
 
 import { query, queryOne, type Queryable } from "./db";
 import { AppError } from "./errors";
+import { hashPassword } from "./password";
+import type { CreateCustomerInput } from "@/lib/schemas/admin-customer";
 
 /*
   Data pelanggan untuk konsol admin.
@@ -131,6 +133,124 @@ export type CustomerSummary = {
   suspended: number;
   without_device: number;
 };
+
+export type CreatedCustomer = {
+  id: string;
+  full_name: string;
+  email: string | null;
+  phone_e164: string | null;
+  providers: string[];
+};
+
+/*
+  Pembuatan pelanggan manual dari konsol admin.
+
+  Pemeriksaan duplikat memakai FOR UPDATE pada baris cara masuk yang cocok, supaya dua
+  operator yang membuat pelanggan dengan email sama pada saat bersamaan tidak lolos keduanya.
+  Untuk email yang belum ada barisnya, unik parsial di database tetap menjadi penjaga terakhir,
+  dan pelanggarannya diterjemahkan menjadi galat yang menyebutkan alamat yang dipakai.
+
+  Cara masuk email ditandai terverifikasi sejak dibuat, sama seperti pendaftaran mobile yang
+  menandai verifikasi setelah kata sandi disimpan: tidak ada alur konfirmasi terpisah untuk
+  akun yang dibuat admin, dan membiarkannya tidak terverifikasi akan mengunci pelanggan di
+  layar verifikasi yang tidak pernah mereka minta.
+*/
+export async function createCustomer(
+  client: PoolClient,
+  input: CreateCustomerInput,
+): Promise<CreatedCustomer> {
+  if (input.email) {
+    const existing = await queryOne<{ id: string }>(
+      `SELECT a.id FROM customer_auth_accounts a
+       WHERE a.email = $1
+       FOR UPDATE`,
+      [input.email],
+      client,
+    );
+    if (existing) {
+      throw new AppError({
+        code: "EMAIL_ALREADY_REGISTERED",
+        message: `Alamat ${input.email} sudah dipakai pelanggan lain. Cari pelanggan itu lewat kolom pencarian untuk memeriksa akunnya.`,
+      });
+    }
+  }
+
+  if (input.phone_e164) {
+    const existing = await queryOne<{ id: string }>(
+      `SELECT a.id FROM customer_auth_accounts a
+       WHERE a.phone_e164 = $1
+       FOR UPDATE`,
+      [input.phone_e164],
+      client,
+    );
+    if (existing) {
+      throw new AppError({
+        code: "PHONE_ALREADY_LINKED",
+        message: `Nomor ${input.phone_e164} sudah dipakai pelanggan lain. Cari pelanggan itu lewat kolom pencarian untuk memeriksa akunnya.`,
+      });
+    }
+  }
+
+  const customer = await queryOne<{ id: string }>(
+    "INSERT INTO customers (full_name, status) VALUES ($1, 'active') RETURNING id",
+    [input.full_name],
+    client,
+  );
+  if (!customer) {
+    throw new Error("penyisipan pelanggan gagal");
+  }
+
+  const providers: string[] = [];
+
+  if (input.email && input.password) {
+    try {
+      await client.query(
+        `INSERT INTO customer_auth_accounts
+           (customer_id, provider, email, password_hash, is_verified, verified_at)
+         VALUES ($1, 'email', $2, $3, true, now())`,
+        [customer.id, input.email, await hashPassword(input.password)],
+      );
+    } catch (error) {
+      /* Kode 23505 = pelanggaran unik PostgreSQL. */
+      if ((error as { code?: string }).code === "23505") {
+        throw new AppError({
+          code: "EMAIL_ALREADY_REGISTERED",
+          message: `Alamat ${input.email} sudah dipakai pelanggan lain. Cari pelanggan itu lewat kolom pencarian untuk memeriksa akunnya.`,
+        });
+      }
+      throw error;
+    }
+    providers.push("email");
+  }
+
+  if (input.phone_e164) {
+    try {
+      await client.query(
+        `INSERT INTO customer_auth_accounts
+           (customer_id, provider, phone_e164, is_verified, verified_at)
+         VALUES ($1, 'whatsapp', $2, true, now())`,
+        [customer.id, input.phone_e164],
+      );
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") {
+        throw new AppError({
+          code: "PHONE_ALREADY_LINKED",
+          message: `Nomor ${input.phone_e164} sudah dipakai pelanggan lain. Cari pelanggan itu lewat kolom pencarian untuk memeriksa akunnya.`,
+        });
+      }
+      throw error;
+    }
+    providers.push("whatsapp");
+  }
+
+  return {
+    id: customer.id,
+    full_name: input.full_name,
+    email: input.email ?? null,
+    phone_e164: input.phone_e164 ?? null,
+    providers,
+  };
+}
 
 /*
   Ringkasan dihitung dari seluruh pelanggan, bukan dari halaman yang sedang terbuka.

@@ -20,10 +20,12 @@ module.exports = {
       name: "nayaka",
       cwd: "/home/unity008/Projekan/Nayaka",
       /*
-        Biner `next` dipanggil langsung, bukan lewat `npm run dev`, karena host dan port pengikat
-        harus diberikan sebagai argumen. Variabel HOSTNAME di `env` tidak dihormati `next dev`,
-        sehingga prosesnya mendengarkan di seluruh antarmuka tanpa terlihat dari konfigurasi.
+        PM2 menjalankan biner lewat interpreter node, bukan lewat shell — argumen tambahan
+        (host/port) tetap lewat `args`. `interpreter: "none"` membuat PM2 mengeksekusi skrip
+        apa adanya, dan biner `next` di sini adalah shell wrapper sehingga akan gagal diparse
+        oleh node kalau dijalankan dengan interpreter default.
       */
+      interpreter: "none",
       script: "node_modules/.bin/next",
       args: "dev -H 127.0.0.1 -p 3101",
       /*
