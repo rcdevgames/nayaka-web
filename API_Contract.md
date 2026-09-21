@@ -936,6 +936,7 @@ Inventory device dikelola admin. Device didaftarkan sebelum dapat diklaim custom
 GET   /api/v1/admin/devices
 POST  /api/v1/admin/devices
 GET   /api/v1/admin/devices/{device_id}
+GET   /api/v1/admin/devices/{device_id}/stream
 PATCH /api/v1/admin/devices/{device_id}
 POST  /api/v1/admin/devices/{device_id}/assign
 POST  /api/v1/admin/devices/{device_id}/unassign
@@ -992,6 +993,10 @@ Response `201`:
 `claim_label.claim_token` hanya dikembalikan sekali, yaitu saat pembuatan atau saat rotasi. Server menyimpan hash-nya. Token ini dicetak pada label atau dus perangkat.
 
 `POST /api/v1/admin/devices/{device_id}/claim-code/rotate` mencabut claim code lama dan membuat yang baru. Dipakai jika label rusak atau device perlu diterbitkan ulang setelah unassign.
+
+`GET /api/v1/admin/devices/{device_id}/stream` mem-proxy `stream_url` kamera sebagai `multipart/x-mixed-replace` (MJPEG). Endpoint memerlukan sesi admin dan izin `device.read`, sehingga URL sumber CCTV tidak langsung dibuka ke browser. UI wajib meminta konfirmasi privasi sebelum memuat endpoint ini; menutup preview menghentikan pemuatan stream.
+
+Response sukses bukan JSON: body adalah stream MJPEG dengan header `Cache-Control: no-store`.
 
 #### Assign dan unassign oleh admin
 

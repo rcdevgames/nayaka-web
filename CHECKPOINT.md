@@ -156,8 +156,8 @@ tanggal UTC dan pada pukul 07.00 WIB tanggalnya masih kemarin.
 - `/devices`: ringkasan dan filter status. Kolom: Nomor perangkat, Nomor seri, Nama, Model,
   Status, Pelanggan, Cara masuk, Terpasang sejak
 - `/devices/baru`: form pendaftaran, lalu menampilkan kode claim
-- `/devices/[id]`: identitas, garansi, penugasan, percobaan klaim. Aksi: tugaskan, lepas,
-  rotasi kode claim, nonaktifkan
+- `/devices/[id]`: identitas, garansi, penugasan, percobaan klaim, dan preview CCTV MJPEG melalui
+  tombol konfirmasi privasi. Aksi: tugaskan, lepas, rotasi kode claim, nonaktifkan
 
 **Paket dan harga**
 

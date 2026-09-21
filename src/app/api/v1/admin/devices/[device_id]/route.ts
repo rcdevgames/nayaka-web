@@ -88,6 +88,7 @@ export const GET = routeHandler("admin.devices.detail", async (_request, request
         deactivated_at: device.deactivated_at?.toISOString() ?? null,
         created_at: device.created_at.toISOString(),
         updated_at: device.updated_at.toISOString(),
+        stream_url: device.stream_url,
       },
       customer: device.customer_id
         ? {
