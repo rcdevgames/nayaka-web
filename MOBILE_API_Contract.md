@@ -270,11 +270,19 @@ terbaru, dan alert terbaru.
 ```http
 GET /api/v1/mobile/cameras
 GET /api/v1/mobile/cameras/{camera_id}
+GET /api/v1/mobile/stream/{device_id}?token={short_lived_jwt}
+GET /api/v1/mobile/stream/{device_id}/thumbnail?token={short_lived_jwt}
 ```
 
 List mendukung filter `status`, `recording_status`, `q`, `limit`, dan `cursor`. Status koneksi dan
 status recording berasal dari `camera_telemetry`; status lifecycle pada `devices` tidak dipetakan
 menjadi online.
+
+`stream_url` mengembalikan proxy URL same-origin dengan token JWT short-lived (5 menit) di query param.
+`thumbnail_url` juga memakai proxy dengan token terpisah (purpose=thumbnail) agar token stream tidak bisa
+dipakai untuk thumbnail dan sebaliknya. Token hanya berlaku untuk `device_id` dan `installation_id`
+tertentu, dan kedaluwarsa otomatis. URL sumber asli tidak pernah dikembalikan ke mobile. Response proxy
+adalah `multipart/x-mixed-replace` MJPEG untuk stream, dan `image/jpeg` untuk thumbnail.
 
 ## 6. Alert API
 

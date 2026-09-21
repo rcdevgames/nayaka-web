@@ -30,6 +30,7 @@ export const resetPasswordSchema = z.object({
   new_password: z.string().min(8).max(200),
 });
 export const mobileRefreshSchema = z.object({ refresh_token: z.string().min(20).max(500), installation_id: z.string().min(1).max(200) });
+export const streamTokenSchema = z.object({ installation_id: z.string().min(1).max(200), device_id: z.string().min(1).max(200) });
 export const profileSchema = z.object({ full_name: z.string().trim().min(1).max(200).optional(), avatar_url: z.string().url().max(2000).nullable().optional() }).refine((v) => Object.keys(v).length > 0);
 export const settingsSchema = z.object({ notifications_enabled: z.boolean().optional(), alerts_enabled: z.boolean().optional(), critical_alerts_only: z.boolean().optional(), installation_id: z.string().min(1).max(200), platform: z.enum(["ios", "android"]).optional(), app_version: z.string().max(50).optional() }).refine((v) => v.notifications_enabled !== undefined || v.alerts_enabled !== undefined || v.critical_alerts_only !== undefined);
 export const pushSchema = z.object({ installation_id: z.string().min(1).max(200), platform: z.enum(["ios", "android"]), token: z.string().min(1).max(4096), permission: z.enum(["granted", "denied", "not_determined", "unknown"]), app_version: z.string().max(50).optional() });
@@ -46,6 +47,34 @@ function customerSecret(): Uint8Array { return new TextEncoder().encode(jwtCusto
 function passwordError(password: string): void { const problem = passwordProblem(password); if (problem) throw new AppError({ code: "WEAK_PASSWORD", message: problem }); }
 
 export type MobileContext = { customerId: string; sessionId: string; installationId: string };
+
+const STREAM_TOKEN_TTL = 5 * 60;
+
+function streamSecret(): Uint8Array { return new TextEncoder().encode(jwtCustomerAccessSecret() + "|stream"); }
+export async function signStreamToken(customerId: string, deviceId: string, installationId: string): Promise<string> {
+  const { SignJWT } = await import("jose");
+  return new SignJWT({ typ: "cctv_stream", device_id: deviceId, installation_id: installationId }).setProtectedHeader({ alg: "HS256" }).setSubject(customerId).setIssuedAt().setExpirationTime(`${STREAM_TOKEN_TTL}s`).sign(streamSecret());
+}
+async function verifyStreamToken(token: string, kind: "stream" | "thumbnail"): Promise<{ customerId: string; deviceId: string; installationId: string }> {
+  try {
+    const { jwtVerify } = await import("jose");
+    const { payload } = await jwtVerify(token, streamSecret(), { algorithms: ["HS256"] });
+    if (payload.typ !== "cctv_stream" || typeof payload.sub !== "string" || typeof payload.device_id !== "string" || typeof payload.installation_id !== "string") throw new Error();
+    if (kind === "thumbnail" && payload.purpose !== "thumbnail") throw new Error();
+    if (kind === "stream" && payload.purpose === "thumbnail") throw new Error();
+    return { customerId: payload.sub, deviceId: payload.device_id, installationId: payload.installation_id };
+  } catch { throw new AppError({ code: "TOKEN_EXPIRED", message: "Token tidak berlaku." }); }
+}
+export async function requireStreamToken(request: Request, kind: "stream" | "thumbnail"): Promise<{ customerId: string; deviceId: string; installationId: string }> {
+  const raw = new URL(request.url).searchParams.get("token");
+  if (!raw) throw new AppError({ code: "INVALID_CREDENTIALS", message: "Token diperlukan." });
+  return verifyStreamToken(raw, kind);
+}
+export async function signThumbnailToken(customerId: string, deviceId: string, installationId: string): Promise<string> {
+  const { SignJWT } = await import("jose");
+  return new SignJWT({ typ: "cctv_stream", device_id: deviceId, installation_id: installationId, purpose: "thumbnail" }).setProtectedHeader({ alg: "HS256" }).setSubject(customerId).setIssuedAt().setExpirationTime(`${STREAM_TOKEN_TTL}s`).sign(streamSecret());
+}
+
 export async function signMobileAccessToken(customerId: string, sessionId: string): Promise<string> {
   const { SignJWT } = await import("jose");
   return new SignJWT({ typ: "customer_access", sid: sessionId }).setProtectedHeader({ alg: "HS256" }).setSubject(customerId).setIssuedAt().setExpirationTime(`${ACCESS_TTL}s`).sign(customerSecret());
