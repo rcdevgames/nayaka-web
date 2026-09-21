@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { PencilSimpleIcon, PlusIcon, ProhibitIcon, TrashIcon } from "@phosphor-icons/react";
+import { PlusIcon, ProhibitIcon, TrashIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -88,7 +88,6 @@ function providerLabel(provider: string): string {
 export function CustomerList() {
   const query = usePagedQuery<CustomersResponse>("/api/v1/admin/customers");
   const [createOpen, setCreateOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState<CustomerRow | null>(null);
   const [suspendTarget, setSuspendTarget] = useState<CustomerRow | null>(null);
 
   const filters: FilterDefinition[] = [
@@ -218,7 +217,8 @@ export function CustomerList() {
     },
     /*
       Aksi baris. Nama pelanggan sendiri sudah menjadi tautan ke detail, jadi kolom ini hanya
-      memuat tindakan yang mengubah sesuatu. Tangguhkan hanya untuk akun aktif — akun yang
+      memuat tindakan yang mengubah sesuatu. Perbaikan nama tetap di halaman detail, supaya
+      daftar tidak penuh dengan dialog kecil. Tangguhkan hanya untuk akun aktif — akun yang
       sudah ditangguhkan diaktifkan kembali dari halaman detailnya, karena keputusan itu perlu
       melihat riwayatnya lebih dulu.
     */
@@ -227,14 +227,6 @@ export function CustomerList() {
       header: "Aksi",
       cell: (row) => (
         <div className="flex items-center gap-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            aria-label={`Perbaiki nama ${row.full_name}`}
-            onClick={() => setEditTarget(row)}
-          >
-            <PencilSimpleIcon aria-hidden className="size-4" />
-          </Button>
           {row.status === "active" ? (
             <Button
               size="icon"
@@ -349,15 +341,6 @@ export function CustomerList() {
         onClose={() => setCreateOpen(false)}
         onDone={() => {
           setCreateOpen(false);
-          query.reload();
-        }}
-      />
-
-      <EditNameRowDialog
-        target={editTarget}
-        onClose={() => setEditTarget(null)}
-        onDone={() => {
-          setEditTarget(null);
           query.reload();
         }}
       />
@@ -499,21 +482,11 @@ function CreateCustomerDialog({
 }
 
 /*
-  Dialog aksi baris: perbaiki nama atau tangguhkan akun.
+  Dialog tangguhkan akun dari daftar.
 
-  Keduanya dipisah (bukan satu dialog dengan field bergantian) supaya tiap formulir punya skema
-  zod dan urutan hook yang tetap, tanpa resolver yang disaring per aksi. Alasan penangguhan
-  tetap wajib sama seperti di halaman detail — daftar yang bisa menangguhkan tanpa alasan
-  adalah jalan pintas yang mengosongkan jejak audit.
+  Alasan tetap wajib sama seperti di halaman detail — daftar yang bisa menangguhkan tanpa
+  alasan adalah jalan pintas yang mengosongkan jejak audit.
 */
-const editNameSchema = z.object({
-  full_name: z
-    .string()
-    .trim()
-    .min(2, "Nama minimal 2 karakter.")
-    .max(120, "Nama maksimal 120 karakter."),
-});
-
 const suspendSchema = z.object({
   reason: z
     .string()
@@ -522,85 +495,7 @@ const suspendSchema = z.object({
     .max(500, "Alasan maksimal 500 karakter."),
 });
 
-type EditNameValues = z.infer<typeof editNameSchema>;
 type SuspendValues = z.infer<typeof suspendSchema>;
-
-function EditNameRowDialog({
-  target,
-  onClose,
-  onDone,
-}: {
-  target: CustomerRow | null;
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const {
-    control,
-    handleSubmit,
-    reset,
-    formState: { isSubmitting },
-  } = useForm<EditNameValues>({
-    resolver: zodResolver(editNameSchema),
-    values: { full_name: target?.full_name ?? "" },
-  });
-
-  async function submit(values: EditNameValues) {
-    if (!target) return;
-    try {
-      await mutate(`/api/v1/admin/customers/${target.id}`, {
-        method: "PATCH",
-        body: values,
-      });
-      notifySuccess("Nama diperbarui", `Nama pelanggan kini ${values.full_name}.`);
-      reset();
-      onDone();
-    } catch (error) {
-      notifyError("Nama gagal diperbarui", toErrorMessage(error));
-    }
-  }
-
-  return (
-    <Dialog
-      open={target !== null}
-      onOpenChange={(open) => {
-        if (!open) {
-          reset();
-          onClose();
-        }
-      }}
-    >
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Perbaiki nama {target?.full_name ?? ""}</DialogTitle>
-          <DialogDescription>
-            Hanya nama yang dapat diubah di sini. Alamat email dan nomor WhatsApp hanya dapat
-            diubah pelanggan sendiri lewat aplikasi.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form noValidate onSubmit={handleSubmit(submit)} className="flex flex-col gap-4">
-          <TextField<EditNameValues>
-            control={control}
-            name="full_name"
-            label="Nama lengkap"
-            placeholder="Nama sesuai catatan pelanggan"
-            required
-          />
-
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
-              Batal
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? <Spinner label="Menyimpan" /> : null}
-              Simpan nama
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 function SuspendRowDialog({
   target,

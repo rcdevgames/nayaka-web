@@ -147,8 +147,8 @@ tanggal UTC dan pada pukul 07.00 WIB tanggalnya masih kemarin.
 
 - `/customers`: ringkasan, pencarian, filter status, tombol tambah pelanggan manual (izin
   `customer.create`). Kolom: Nama, Kontak, Cara masuk, Status akun, Paket, Perangkat, Terdaftar,
-  Aksi (edit nama, tangguhkan, hapus — tangguhkan/hapus wajib alasan; hapus = soft delete,
-  sesi dicabut, perangkat dilepas ke gudang)
+  Aksi (tangguhkan, hapus — keduanya wajib alasan; hapus = soft delete, sesi dicabut,
+  perangkat dilepas ke gudang)
 - `/customers/[id]`: profil, perangkat, riwayat langganan dan tagihan, tangguhkan dengan alasan
 
 **Perangkat**
