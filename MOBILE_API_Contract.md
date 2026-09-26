@@ -270,19 +270,11 @@ terbaru, dan alert terbaru.
 ```http
 GET /api/v1/mobile/cameras
 GET /api/v1/mobile/cameras/{camera_id}
-GET /api/v1/mobile/stream/{device_id}
-GET /api/v1/mobile/stream/{device_id}/thumbnail
 ```
 
 List mendukung filter `status`, `recording_status`, `q`, `limit`, dan `cursor`. Status koneksi dan
 status recording berasal dari `camera_telemetry`; status lifecycle pada `devices` tidak dipetakan
 menjadi online.
-
-`stream_url` dan `thumbnail_url` mengembalikan proxy URL same-origin tanpa token di query param.
-Client wajib mengirim JWT akun (access token login) lewat header `Authorization: Bearer <access_token>`.
-Kepemilikan device diperiksa dari JWT tersebut per request. URL sumber asli tidak pernah dikembalikan
-ke mobile. Response proxy adalah `multipart/x-mixed-replace` MJPEG untuk stream, dan `image/jpeg`
-untuk thumbnail.
 
 ## 6. Alert API
 

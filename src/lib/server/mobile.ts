@@ -46,7 +46,6 @@ function customerSecret(): Uint8Array { return new TextEncoder().encode(jwtCusto
 function passwordError(password: string): void { const problem = passwordProblem(password); if (problem) throw new AppError({ code: "WEAK_PASSWORD", message: problem }); }
 
 export type MobileContext = { customerId: string; sessionId: string; installationId: string };
-
 export async function signMobileAccessToken(customerId: string, sessionId: string): Promise<string> {
   const { SignJWT } = await import("jose");
   return new SignJWT({ typ: "customer_access", sid: sessionId }).setProtectedHeader({ alg: "HS256" }).setSubject(customerId).setIssuedAt().setExpirationTime(`${ACCESS_TTL}s`).sign(customerSecret());

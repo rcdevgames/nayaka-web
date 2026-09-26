@@ -3,7 +3,9 @@
 Catatan keadaan proyek Nayaka. Tujuannya supaya pekerjaan bisa dilanjutkan tanpa membaca ulang
 seluruh riwayat percakapan, dan supaya keputusan yang belum selesai tidak hilang.
 
-Terakhir diperbarui: 21 September 2026. Konsol berjalan di pm2 sebagai proses `nayaka`, port 3101.
+Terakhir diperbarui: 26 September 2026. Konsol dijalankan di pm2 sebagai proses `nayaka`, port
+3101. Saat catatan ini diperbarui prosesnya sedang tidak berjalan, sehingga uji endpoint live
+belum dilakukan.
 
 ---
 
@@ -120,6 +122,12 @@ itu hanya boleh untuk akun uji. Admin sungguhan dinonaktifkan, bukan dihapus.
 **`requireUuid()` mengembalikan 404**, bukan 400, untuk id yang bentuknya salah. Ini disengaja
 dan berlaku di seluruh aplikasi.
 
+**Stream CCTV memakai URL sumber asli.** `cameraList` dan `cameraDetail` mengirim `stream_url`
+dan `thumbnail_url` dari `camera_telemetry` apa adanya, tanpa proxy dan tanpa token tambahan.
+Tidak ada endpoint proxy stream atau thumbnail, dan `GET /api/v1/admin/devices/{device_id}`
+tidak mengembalikan `stream_url`. Percobaan proxy pada 21–22 September 2026 sudah di-revert;
+alasannya ada di `.hermes/plans/2026-09-26_125521-cctv-stream-url-asli.md`.
+
 **Pembulatan dan waktu.** Semua laporan memakai WIB lewat `AT TIME ZONE 'Asia/Jakarta'`.
 Tanggal di layar memakai `jakartaToday()`, bukan `toISOString()`, karena `toISOString()` memberi
 tanggal UTC dan pada pukul 07.00 WIB tanggalnya masih kemarin.
@@ -156,8 +164,8 @@ tanggal UTC dan pada pukul 07.00 WIB tanggalnya masih kemarin.
 - `/devices`: ringkasan dan filter status. Kolom: Nomor perangkat, Nomor seri, Nama, Model,
   Status, Pelanggan, Cara masuk, Terpasang sejak
 - `/devices/baru`: form pendaftaran, lalu menampilkan kode claim
-- `/devices/[id]`: identitas, garansi, penugasan, percobaan klaim, dan preview CCTV MJPEG melalui
-  tombol konfirmasi privasi. Aksi: tugaskan, lepas, rotasi kode claim, nonaktifkan
+- `/devices/[id]`: identitas, garansi, penugasan, percobaan klaim. Aksi: tugaskan, lepas,
+  rotasi kode claim, nonaktifkan
 
 **Paket dan harga**
 
