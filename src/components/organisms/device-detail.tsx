@@ -550,13 +550,43 @@ function StreamPreviewDialog({
 }) {
   const [confirmed, setConfirmed] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [frame, setFrame] = useState(0);
+  const [loadedFrame, setLoadedFrame] = useState<number | null>(null);
 
   useEffect(() => {
     if (!open || !previewOpen || !streamUrl) return;
-    const timer = window.setInterval(() => setFrame((value) => value + 1), 2000);
-    return () => window.clearInterval(timer);
+
+    let cancelled = false;
+    let nextFrame = 0;
+    let timer: number | undefined;
+
+    const loadFrame = () => {
+      const image = new Image();
+      const requestedFrame = nextFrame;
+      image.onload = () => {
+        if (cancelled) return;
+        setLoadedFrame(requestedFrame);
+        nextFrame += 1;
+        timer = window.setTimeout(loadFrame, 2000);
+      };
+      image.onerror = () => {
+        if (cancelled) return;
+        nextFrame += 1;
+        timer = window.setTimeout(loadFrame, 2000);
+      };
+      image.src = `${streamUrl}?frame=${requestedFrame}`;
+    };
+
+    loadFrame();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, [open, previewOpen, streamUrl]);
+
+  function openPreview() {
+    setLoadedFrame(null);
+    setPreviewOpen(true);
+  }
 
   function close() {
     setConfirmed(false);
@@ -599,7 +629,7 @@ function StreamPreviewDialog({
               <Button type="button" variant="secondary" onClick={close}>
                 Batal
               </Button>
-              <Button type="button" disabled={!confirmed} onClick={() => setPreviewOpen(true)}>
+              <Button type="button" disabled={!confirmed} onClick={openPreview}>
                 Buka preview
               </Button>
             </DialogFooter>
@@ -607,17 +637,18 @@ function StreamPreviewDialog({
         ) : streamUrl ? (
           <div className="flex flex-col gap-3">
             <div className="overflow-hidden rounded-lg border border-border bg-black">
-              {/* MJPEG multipart stream cannot be optimized by next/image. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                key={frame}
-                src={`${streamUrl}?frame=${frame}`}
-                alt={`Preview live CCTV ${deviceName}`}
-                className="block aspect-video h-auto max-h-[65vh] w-full object-contain"
-                onError={(event) => {
-                  event.currentTarget.alt = "Frame CCTV gagal dimuat";
-                }}
-              />
+              {loadedFrame === null ? (
+                <div className="flex aspect-video items-center justify-center text-sm text-white/70">
+                  Memuat frame CCTV…
+                </div>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`${streamUrl}?frame=${loadedFrame}`}
+                  alt={`Preview live CCTV ${deviceName}`}
+                  className="block aspect-video h-auto max-h-[65vh] w-full object-contain"
+                />
+              )}
             </div>
             <p className="text-muted-foreground text-[12px]">
               Frame diperbarui setiap 2 detik selama dialog terbuka. Tutup dialog untuk menghentikan pemuatan feed.
