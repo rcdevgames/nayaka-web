@@ -1,4 +1,5 @@
 import { findDevice } from "@/lib/server/devices";
+import { readFirstJpeg } from "@/lib/server/camera-stream";
 import { AppError } from "@/lib/server/errors";
 import { requireAdmin, requirePermission } from "@/lib/server/guard";
 import { requireUuid } from "@/lib/server/request";
@@ -27,12 +28,17 @@ export const GET = routeHandler("admin.devices.stream", async (_request, _reques
     throw new AppError({ code: "INTERNAL_ERROR", message: "Stream CCTV tidak dapat dimuat." });
   }
 
-  return new Response(upstream.body, {
+  const frame = await readFirstJpeg(upstream);
+  if (!frame) {
+    throw new AppError({ code: "INTERNAL_ERROR", message: "Frame CCTV tidak dapat dibaca." });
+  }
+
+  return new Response(new Uint8Array(frame), {
     status: 200,
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate",
       Pragma: "no-cache",
-      "Content-Type": upstream.headers.get("content-type") ?? "multipart/x-mixed-replace; boundary=frame",
+      "Content-Type": "image/jpeg",
       "X-Content-Type-Options": "nosniff",
     },
   });

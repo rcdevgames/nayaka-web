@@ -29,4 +29,11 @@ Status: implementasi selesai; smoke UI terautentikasi belum terverifikasi
 - Smoke test browser sampai panel preview dan endpoint admin dengan sesi admin nyata belum dijalankan karena tidak ada sesi login yang diberikan/tersedia.
 - URL sumber adalah HTTP dan dapat diblokir mixed content bila halaman dibuka melalui HTTPS; ini sifat keputusan URL sumber asli, bukan proxy.
 - `thumbnail_url` target masih sama dengan URL MJPEG stream sehingga bukan thumbnail satu frame.
+
+## Follow-up blank preview
+
+Vercel menerima upstream MJPEG dan frame JPEG valid, tetapi browser tetap menampilkan area hitam saat endpoint admin meneruskan multipart stream langsung. Perbaikan mengubah endpoint admin menjadi pengambil satu frame JPEG (`image/jpeg`), lalu UI meminta frame baru setiap 2 detik dengan cache-busting query. PM2 tidak digunakan.
+
+Verifikasi lokal lanjutan: `pnpm exec tsc --noEmit`, `pnpm lint` (1 warning lama), dan `git diff --check` lulus. Smoke authenticated Vercel tetap memerlukan sesi admin nyata.
+
 - Tidak commit atau push otomatis.

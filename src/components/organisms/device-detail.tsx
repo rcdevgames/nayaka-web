@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeftIcon, ArrowsClockwiseIcon } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -550,6 +550,13 @@ function StreamPreviewDialog({
 }) {
   const [confirmed, setConfirmed] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    if (!open || !previewOpen || !streamUrl) return;
+    const timer = window.setInterval(() => setFrame((value) => value + 1), 2000);
+    return () => window.clearInterval(timer);
+  }, [open, previewOpen, streamUrl]);
 
   function close() {
     setConfirmed(false);
@@ -603,13 +610,17 @@ function StreamPreviewDialog({
               {/* MJPEG multipart stream cannot be optimized by next/image. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={streamUrl}
+                key={frame}
+                src={`${streamUrl}?frame=${frame}`}
                 alt={`Preview live CCTV ${deviceName}`}
                 className="block aspect-video h-auto max-h-[65vh] w-full object-contain"
+                onError={(event) => {
+                  event.currentTarget.alt = "Frame CCTV gagal dimuat";
+                }}
               />
             </div>
             <p className="text-muted-foreground text-[12px]">
-              Preview aktif selama dialog terbuka. Tutup dialog untuk menghentikan pemuatan feed.
+              Frame diperbarui setiap 2 detik selama dialog terbuka. Tutup dialog untuk menghentikan pemuatan feed.
             </p>
             <DialogFooter>
               <Button type="button" variant="secondary" onClick={close}>
