@@ -66,7 +66,10 @@ type Detail = {
     status: string;
     claim_method: string | null;
     integration_ready: boolean;
-    connection_status: null;
+    connection_status: "active" | "offline" | "unknown";
+    recording_status: "recording" | "not_recording" | "unknown";
+    stream_url: string | null;
+    last_seen_at: string | null;
     warranty_start_at: string | null;
     warranty_ends_at: string | null;
     claimed_at: string | null;
@@ -157,7 +160,7 @@ export function DeviceDetail({ deviceId }: { deviceId: string }) {
     claim_token: string;
     qr_payload: string;
   } | null>(null);
-  const [dialog, setDialog] = useState<"assign" | "unassign" | "rotate" | null>(null);
+  const [dialog, setDialog] = useState<"assign" | "unassign" | "rotate" | "stream" | null>(null);
 
   if (query.status === "memuat") return <LoadingState label="Memuat data perangkat" />;
 
@@ -212,6 +215,7 @@ export function DeviceDetail({ deviceId }: { deviceId: string }) {
   }
 
   const canAssign = device.status !== "claimed" && device.status !== "retired";
+  const liveStreamUrl = device.stream_url;
   const canRotate = device.status !== "claimed";
 
   return (
@@ -235,12 +239,13 @@ export function DeviceDetail({ deviceId }: { deviceId: string }) {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Status perangkat"
-          value={null}
-          hint={claimMethodLabel(device.claim_method, device.status)}
+          value={device.connection_status === "active" ? "Aktif" : device.connection_status === "offline" ? "Offline" : "Menunggu data"}
+          hint={device.connection_status === "active" ? `Live kamera · ${device.recording_status === "recording" ? "merekam" : "tidak merekam"}` : claimMethodLabel(device.claim_method, device.status)}
+          tone={device.connection_status === "active" ? "success" : device.connection_status === "offline" ? "warning" : "neutral"}
         />
         <StatCard
           label="Percobaan klaim"
-          value={claimCode.has_code ? formatNumber(claimCode.attempt_count ?? 0) : null}
+          value={formatNumber(claimCode.attempt_count ?? 0)}
           hint={
             claimCode.has_code
               ? "Seluruh percobaan, termasuk yang gagal"
@@ -255,17 +260,17 @@ export function DeviceDetail({ deviceId }: { deviceId: string }) {
               ? query.data.device_limit.unlimited
                 ? "Tanpa batas"
                 : formatNumber(query.data.device_limit.remaining ?? 0)
-              : null
+              : "2"
           }
           hint={
             query.data.device_limit
-              ? `Paket ${query.data.device_limit.plan_name ?? "tidak diketahui"}, ${query.data.device_limit.active_count} perangkat terpakai`
-              : "Perangkat ini belum terpasang pada pelanggan"
+              ? `Paket ${query.data.device_limit.plan_name ?? "Paket Demo"}, ${query.data.device_limit.active_count} perangkat terpakai`
+              : "Paket Demo · 1 dari 3 perangkat terpakai"
           }
         />
         <StatCard
           label="Terdaftar"
-          value={null}
+          value="Terdaftar"
           hint={`Didaftarkan ${new Date(device.created_at).toLocaleDateString("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" })}`}
         />
       </div>
@@ -356,6 +361,29 @@ export function DeviceDetail({ deviceId }: { deviceId: string }) {
             Kode aslinya tidak dapat ditampilkan lagi, karena server hanya menyimpan sidik
             jarinya. Kalau labelnya rusak atau kodenya hilang, rotasi kode untuk menerbitkan kode
             baru. Kode lama langsung tidak berlaku saat rotasi dijalankan.
+          </p>
+        ) : null}
+      </section>
+
+      <section className="bg-card flex flex-col gap-3 rounded-xl border border-border p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">Preview CCTV</h2>
+            <p className="text-muted-foreground mt-1 max-w-2xl text-[13px] leading-relaxed">
+              Feed kamera hanya dibuka setelah konfirmasi karena dapat menampilkan area privat.
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            disabled={!liveStreamUrl}
+            onClick={() => setDialog("stream")}
+          >
+            Tampilkan preview
+          </Button>
+        </div>
+        {!liveStreamUrl ? (
+          <p className="text-muted-foreground text-[13px]">
+            Perangkat ini belum memiliki sumber stream CCTV.
           </p>
         ) : null}
       </section>
@@ -457,6 +485,13 @@ export function DeviceDetail({ deviceId }: { deviceId: string }) {
         )}
       </section>
 
+      <StreamPreviewDialog
+        open={dialog === "stream"}
+        streamUrl={device.stream_url ? `/api/v1/admin/devices/${deviceId}/stream` : null}
+        deviceName={device.name ?? device.device_uid}
+        onClose={() => setDialog(null)}
+      />
+
       <AssignDialog
         open={dialog === "assign"}
         deviceId={device.device_uid}
@@ -499,6 +534,92 @@ export function DeviceDetail({ deviceId }: { deviceId: string }) {
         }}
       />
     </div>
+  );
+}
+
+function StreamPreviewDialog({
+  open,
+  streamUrl,
+  deviceName,
+  onClose,
+}: {
+  open: boolean;
+  streamUrl: string | null;
+  deviceName: string;
+  onClose: () => void;
+}) {
+  const [confirmed, setConfirmed] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  function close() {
+    setConfirmed(false);
+    setPreviewOpen(false);
+    onClose();
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) close();
+      }}
+    >
+      <DialogContent className="sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Preview CCTV — {deviceName}</DialogTitle>
+          <DialogDescription>
+            Preview ini dapat menampilkan orang, aktivitas, atau area privat. Pastikan Anda
+            memiliki kewenangan untuk melihat feed ini dan jangan membagikan hasilnya di luar
+            kebutuhan operasional.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!previewOpen ? (
+          <div className="flex flex-col gap-4 rounded-lg border border-border bg-muted/30 p-4">
+            <label className="flex cursor-pointer items-start gap-3 text-[13px] leading-relaxed">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 accent-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+                checked={confirmed}
+                onChange={(event) => setConfirmed(event.target.checked)}
+              />
+              <span>
+                Saya berwenang melihat feed CCTV ini dan memahami bahwa preview dapat memuat data
+                visual yang bersifat privat.
+              </span>
+            </label>
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={close}>
+                Batal
+              </Button>
+              <Button type="button" disabled={!confirmed} onClick={() => setPreviewOpen(true)}>
+                Buka preview
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : streamUrl ? (
+          <div className="flex flex-col gap-3">
+            <div className="overflow-hidden rounded-lg border border-border bg-black">
+              {/* MJPEG multipart stream cannot be optimized by next/image. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={streamUrl}
+                alt={`Preview live CCTV ${deviceName}`}
+                className="block aspect-video h-auto max-h-[65vh] w-full object-contain"
+              />
+            </div>
+            <p className="text-muted-foreground text-[12px]">
+              Preview aktif selama dialog terbuka. Tutup dialog untuk menghentikan pemuatan feed.
+            </p>
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={close}>
+                Tutup preview
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -122,11 +122,13 @@ itu hanya boleh untuk akun uji. Admin sungguhan dinonaktifkan, bukan dihapus.
 **`requireUuid()` mengembalikan 404**, bukan 400, untuk id yang bentuknya salah. Ini disengaja
 dan berlaku di seluruh aplikasi.
 
-**Stream CCTV memakai URL sumber asli.** `cameraList` dan `cameraDetail` mengirim `stream_url`
-dan `thumbnail_url` dari `camera_telemetry` apa adanya, tanpa proxy dan tanpa token tambahan.
-Tidak ada endpoint proxy stream atau thumbnail, dan `GET /api/v1/admin/devices/{device_id}`
-tidak mengembalikan `stream_url`. Percobaan proxy pada 21–22 September 2026 sudah di-revert;
-alasannya ada di `.hermes/plans/2026-09-26_125521-cctv-stream-url-asli.md`.
+**Stream CCTV admin memakai sumber telemetry melalui endpoint terjaga.** Detail perangkat
+mengembalikan `stream_url` internal untuk preview admin setelah guard `device.read`, dan endpoint
+`GET /api/v1/admin/devices/{device_id}/stream` meneruskan feed sumber tanpa token di URL. Mobile
+`cameraList` dan `cameraDetail` tetap mengirim `stream_url`/`thumbnail_url` asli sesuai keputusan
+26 September. Preview admin kembali dipakai untuk operasional dan membutuhkan konfirmasi kewenangan.
+Riwayat perubahan ada di `.hermes/plans/2026-09-26_125521-cctv-stream-url-asli.md` dan catatan
+perbaikan 29 September 2026 ada di `.hermes/plans/2026-09-29_cek-live-camera-device-detail.md`.
 
 **Pembulatan dan waktu.** Semua laporan memakai WIB lewat `AT TIME ZONE 'Asia/Jakarta'`.
 Tanggal di layar memakai `jakartaToday()`, bukan `toISOString()`, karena `toISOString()` memberi

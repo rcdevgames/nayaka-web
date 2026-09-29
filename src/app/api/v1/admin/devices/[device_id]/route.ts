@@ -76,11 +76,13 @@ export const GET = routeHandler("admin.devices.detail", async (_request, request
         status: device.status,
         claim_method: device.claim_method,
         /*
-          Selama integrasi CCTV belum ada, backend belum pernah menerima data apa pun dari
-          perangkat. Klien tidak boleh menampilkan status online atau offline pada v1.
+          Status koneksi dibaca dari telemetry kamera; status inventory tetap dikirim terpisah.
         */
-        integration_ready: false,
-        connection_status: null,
+        integration_ready: Boolean(device.stream_url),
+        connection_status: device.connection_status,
+        recording_status: device.recording_status,
+        last_seen_at: device.last_seen_at?.toISOString() ?? null,
+        stream_url: device.stream_url,
         warranty_start_at: device.warranty_start_at?.toISOString() ?? null,
         warranty_ends_at: warrantyEndsAt?.toISOString() ?? null,
         claimed_at: device.claimed_at?.toISOString() ?? null,

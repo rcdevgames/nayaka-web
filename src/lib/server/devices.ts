@@ -114,14 +114,22 @@ export async function findDevice(deviceId: string, executor?: Queryable) {
     deactivated_at: Date | null;
     created_at: Date;
     updated_at: Date;
+    stream_url: string | null;
+    connection_status: "active" | "offline" | "unknown";
+    recording_status: "recording" | "not_recording" | "unknown";
+    last_seen_at: Date | null;
   }>(
     `SELECT d.id, d.device_uid, d.serial_number, d.name, d.model, d.hardware_revision,
             d.batch_number, d.mac_address, d.imei, d.status, d.claim_method, d.customer_id,
             c.full_name AS customer_name, c.status AS customer_status,
             d.registered_by_admin_id, a.full_name AS registered_by_name,
             d.warranty_start_at, d.claimed_at, d.activated_at, d.deactivated_at,
-            d.created_at, d.updated_at
+            d.created_at, d.updated_at, t.stream_url,
+            COALESCE(t.connection_status, 'unknown') AS connection_status,
+            COALESCE(t.recording_status, 'unknown') AS recording_status,
+            t.last_seen_at
      FROM devices d
+     LEFT JOIN camera_telemetry t ON t.device_id = d.id
      LEFT JOIN customers c ON c.id = d.customer_id
      LEFT JOIN admin_users a ON a.id = d.registered_by_admin_id
      WHERE d.id = $1`,
